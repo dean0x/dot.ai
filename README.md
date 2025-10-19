@@ -1,4 +1,4 @@
-# dotai
+# .ai files
 
 AI-powered code generation from `.ai` specification files.
 
