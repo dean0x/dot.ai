@@ -1,10 +1,10 @@
-# .ai file type
+# Dot.ai File System
 
 AI-powered code generation from `.ai` specification files.
 
 ## Overview
 
-`dotai` enables you to create **reactive specifications** that generate code artifacts. Write your requirements in `.ai` files (Markdown with YAML frontmatter), and let AI coding agents implement them.
+`Dot.ai` enables you to create **reactive specifications** that generate code artifacts. Write your requirements in `.ai` files (Markdown with YAML frontmatter), and let AI coding agents implement them.
 
 ### Key Concepts
 
