@@ -1,0 +1,22 @@
+---
+agent: claude-code
+artifacts: []
+---
+
+# Button Component Specification
+
+Create a reusable Button component with TypeScript and React.
+
+## Requirements
+
+- Support variants: primary, secondary, danger
+- Support sizes: small, medium, large
+- Include loading state with spinner
+- Include disabled state
+- Full accessibility (ARIA labels, keyboard navigation)
+
+## Testing
+
+- Unit tests for all variants
+- Unit tests for disabled/loading states
+- Accessibility tests
