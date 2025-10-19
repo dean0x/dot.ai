@@ -1,4 +1,4 @@
-# .ai files
+# .ai file type
 
 AI-powered code generation from `.ai` specification files.
 
