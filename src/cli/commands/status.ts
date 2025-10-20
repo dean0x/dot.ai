@@ -57,7 +57,7 @@ export async function statusCommand(targetPath?: string): Promise<void> {
     // Summary
     const totalToProcess = changes.new.length + changes.changed.length;
     if (totalToProcess > 0) {
-      console.log(chalk.blue(`Run "ai gen" to process ${totalToProcess} file(s)`));
+      console.log(chalk.blue(`Run "dot gen" to process ${totalToProcess} file(s)`));
     } else {
       console.log(chalk.white('No changes detected. All .ai files are up to date.'));
     }

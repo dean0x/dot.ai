@@ -31,28 +31,29 @@ export class ClaudeCodeAgent implements CodingAgent {
       // Parse JSON output from claude-code
       const json = JSON.parse(rawOutput);
 
-      // Extract file paths from the response
-      // The exact structure may vary, but typically includes file operations
       const artifacts = new Set<string>();
 
-      // Try different possible locations in the JSON structure
-      if (json.result?.files) {
-        for (const file of json.result.files) {
-          if (typeof file === 'string') {
-            artifacts.add(file);
-          } else if (file.path) {
-            artifacts.add(file.path);
-          }
+      // Extract file paths from the result text
+      // Claude-code mentions file paths in the result string
+      if (json.result && typeof json.result === 'string') {
+        // Match patterns like: "Created file.ts", "file.ts created", "/path/to/file.ts"
+        // Look for common file extensions
+        const filePattern = /(?:^|\s|`)([A-Za-z0-9_.-]+\.(ts|tsx|js|jsx|py|rs|go|java|cpp|c|h|css|scss|html|json|yaml|yml|md|txt|sh))(?:$|\s|`)/g;
+        const matches = json.result.matchAll(filePattern);
+        for (const match of matches) {
+          artifacts.add(match[1]);
         }
       }
 
-      // Also check for tool results that wrote/edited files
-      if (json.result?.toolResults) {
-        for (const toolResult of json.result.toolResults) {
-          if (toolResult.tool === 'Write' || toolResult.tool === 'Edit') {
-            if (toolResult.parameters?.file_path) {
-              artifacts.add(toolResult.parameters.file_path);
-            }
+      // Also try to extract absolute paths
+      if (json.result && typeof json.result === 'string') {
+        const absolutePathPattern = /`([^`]+\.(ts|tsx|js|jsx|py|rs|go|java|cpp|c|h|css|scss|html|json|yaml|yml|md|txt|sh))`/g;
+        const matches = json.result.matchAll(absolutePathPattern);
+        for (const match of matches) {
+          // Extract just the filename from absolute paths
+          const filename = match[1].split('/').pop();
+          if (filename) {
+            artifacts.add(filename);
           }
         }
       }
@@ -60,7 +61,6 @@ export class ClaudeCodeAgent implements CodingAgent {
       return Array.from(artifacts);
     } catch {
       // If JSON parsing fails, return empty array
-      // We'll rely on file system scanning as fallback
       return [];
     }
   }
@@ -68,10 +68,10 @@ export class ClaudeCodeAgent implements CodingAgent {
   private async runClaudeCode(prompt: string, options: InvokeOptions): Promise<string> {
     return new Promise((resolve, reject) => {
       const args = [
-        '-p', // Print mode (headless)
+        '-p', // Print mode (headless, already non-interactive)
         prompt,
         '--output-format', 'json',
-        '--no-interactive',
+        '--permission-mode', 'acceptEdits', // Auto-accept file edits in headless mode
       ];
 
       // Add agent-specific configuration
@@ -86,7 +86,13 @@ export class ClaudeCodeAgent implements CodingAgent {
           args.push('--allowedTools', String(config.allowedTools));
         }
 
+        // Override default permission mode if specified
         if (config.permission_mode) {
+          // Remove the default we added above
+          const permIdx = args.indexOf('--permission-mode');
+          if (permIdx !== -1) {
+            args.splice(permIdx, 2);
+          }
           args.push('--permission-mode', String(config.permission_mode));
         }
       }

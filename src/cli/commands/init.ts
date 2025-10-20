@@ -14,7 +14,7 @@ export async function initCommand(): Promise<void> {
     console.log();
     console.log(chalk.white('Next steps:'));
     console.log(chalk.white('  1. Create a .ai file with your specification'));
-    console.log(chalk.white('  2. Run: ai gen'));
+    console.log(chalk.white('  2. Run: dot gen'));
   } catch (error) {
     console.error(chalk.red('Error initializing .dotai:'), error);
     process.exit(1);

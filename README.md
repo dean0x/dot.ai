@@ -19,6 +19,36 @@ AI-powered code generation from `.ai` specification files.
 npm install -g @dean0x/dot
 ```
 
+## Authentication
+
+dot.ai uses Claude Code under the hood. You can authenticate in two ways:
+
+### Option 1: Claude Max/Pro Plan (Recommended)
+
+If you have a Claude.ai Max or Pro subscription, Claude Code will automatically use your browser authentication:
+
+```bash
+# No API key needed - uses your Claude.ai subscription
+dot gen
+```
+
+### Option 2: API Key
+
+Set your Anthropic API key as an environment variable:
+
+```bash
+export ANTHROPIC_API_KEY=your_api_key_here
+```
+
+Get your API key from: https://console.anthropic.com/
+
+Add to your shell profile to make it permanent:
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+echo 'export ANTHROPIC_API_KEY=your_api_key_here' >> ~/.bashrc
+source ~/.bashrc
+```
+
 ## Quick Start
 
 ### 1. Initialize a project
