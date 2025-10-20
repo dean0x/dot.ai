@@ -27,7 +27,7 @@ npm run build
 npm link
 
 # Now you can use `ai` command globally
-ai --version
+dot --version
 ```
 
 ### Development Workflow
@@ -176,7 +176,7 @@ artifacts: []
 ---
 Test specification
 EOF
-ai gen
+dot gen
 ```
 
 ### Adding a New CLI Command
@@ -226,13 +226,13 @@ program
 
 Before submitting a PR, test:
 
-- [ ] `ai init` - Creates .dotai structure correctly
-- [ ] `ai gen` - Processes .ai files (with test agent)
-- [ ] `ai status` - Shows correct change detection
-- [ ] `ai ls` - Lists files accurately
-- [ ] `ai clean` - Clears state
-- [ ] `ai --help` - Shows help
-- [ ] `ai --version` - Shows version
+- [ ] `dot init` - Creates .dotai structure correctly
+- [ ] `dot gen` - Processes .ai files (with test agent)
+- [ ] `dot status` - Shows correct change detection
+- [ ] `dot ls` - Lists files accurately
+- [ ] `dot clean` - Clears state
+- [ ] `dot --help` - Shows help
+- [ ] `dot --version` - Shows version
 
 ### Future: Automated Tests
 
@@ -353,7 +353,7 @@ Clear description of the bug
 
 **To Reproduce**
 Steps to reproduce:
-1. Run `ai gen`
+1. Run `dot gen`
 2. See error
 
 **Expected Behavior**

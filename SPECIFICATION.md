@@ -139,7 +139,7 @@ project/
 ### Data Flow
 
 ```
-1. User runs `ai gen`
+1. User runs `dot gen`
 2. Find all .ai files in directory tree
 3. Parse frontmatter + markdown content
 4. Load state from .dotai/state.json
@@ -341,7 +341,7 @@ clearState(cwd?: string): Promise<void>
 ```
 - Resets to empty state
 - Preserves version
-- Used by `ai clean` command
+- Used by `dot clean` command
 
 ### Configuration File
 
@@ -402,7 +402,7 @@ interface ChangeDetectionResult {
 
 **Command:**
 ```bash
-ai gen --force
+dot gen --force
 ```
 
 ---
@@ -629,7 +629,7 @@ const patch = createTwoFilesPatch(
 
 ### Commands
 
-#### `ai init`
+#### `dot init`
 
 **Purpose:** Initialize `.dotai` directory structure
 
@@ -650,10 +650,10 @@ Initializing .dotai directory...
 
 Next steps:
   1. Create a .ai file with your specification
-  2. Run: ai gen
+  2. Run: dot gen
 ```
 
-#### `ai gen [path]`
+#### `dot gen [path]`
 
 **Purpose:** Generate code from `.ai` files
 
@@ -698,7 +698,7 @@ Summary:
   ✓ 2 file(s) processed successfully
 ```
 
-#### `ai status [path]`
+#### `dot status [path]`
 
 **Purpose:** Show which `.ai` files have changed
 
@@ -731,7 +731,7 @@ Unchanged (2):
 Run "ai gen" to process 3 file(s)
 ```
 
-#### `ai ls [path]`
+#### `dot ls [path]`
 
 **Purpose:** List all `.ai` files and their artifacts
 
@@ -764,7 +764,7 @@ Listing .ai files in ./src...
 Total: 2 .ai file(s)
 ```
 
-#### `ai clean`
+#### `dot clean`
 
 **Purpose:** Clear all generation state
 
@@ -824,7 +824,7 @@ npm install -g dotai
 
 # 2. Initialize project
 cd my-project
-ai init
+dot init
 
 # 3. Create first .ai file
 cat > src/Button.ai <<EOF
@@ -839,7 +839,7 @@ Create a React Button component with TypeScript.
 EOF
 
 # 4. Generate
-ai gen
+dot gen
 
 # 5. Artifacts are created and tracked
 cat src/Button.ai
@@ -854,11 +854,11 @@ vim src/Button.ai
 # Add: "- Include disabled state"
 
 # 2. Check what changed
-ai status
+dot status
 # Shows: Changed (1): src/Button.ai
 
 # 3. Generate updates
-ai gen
+dot gen
 # Sends diff to agent, updates artifacts
 
 # 4. Review changes
@@ -877,7 +877,7 @@ vim src/Button.ai
 # Adds new requirement
 
 # 3. Generate
-ai gen
+dot gen
 # Agent sees:
 #   - Spec diff (new requirement)
 #   - Current artifact state (with manual edits)
@@ -888,7 +888,7 @@ ai gen
 
 ```bash
 # Regenerate everything from scratch
-ai gen --force
+dot gen --force
 
 # Useful for:
 # - Testing agent with same prompts
@@ -900,13 +900,13 @@ ai gen --force
 
 ```bash
 # Generate specific directory
-ai gen ./src/components
+dot gen ./src/components
 
 # Check status of specific directory
-ai status ./src/components
+dot status ./src/components
 
 # List specific directory
-ai ls ./src/components
+dot ls ./src/components
 ```
 
 ---
@@ -915,7 +915,7 @@ ai ls ./src/components
 
 ### 1. CLI Command Over File Watching
 
-**Decision:** Use explicit `ai gen` command instead of reactive file watching
+**Decision:** Use explicit `dot gen` command instead of reactive file watching
 
 **Rationale:**
 - **Cost control:** AI API calls are expensive; user controls when to spend
@@ -1021,7 +1021,7 @@ ai ls ./src/components
 
 **Design:**
 ```bash
-ai gen --parallel 3  # Process up to 3 files concurrently
+dot gen --parallel 3  # Process up to 3 files concurrently
 ```
 
 **Considerations:**
@@ -1061,7 +1061,7 @@ agent_config:
 
 **Design:**
 ```bash
-ai gen --dry-run
+dot gen --dry-run
 # Shows:
 # Would process 3 file(s):
 #   - Button.ai (changed)
@@ -1076,7 +1076,7 @@ ai gen --dry-run
 
 **Design:**
 ```bash
-ai gen --interactive
+dot gen --interactive
 # Prompts:
 # Process Button.ai? (y/n/diff/skip)
 ```
@@ -1087,7 +1087,7 @@ ai gen --interactive
 
 **Design:**
 ```bash
-ai gen --watch
+dot gen --watch
 # Watches .ai files for changes
 # Debounces 3 seconds after last edit
 # Auto-generates on save
@@ -1099,10 +1099,10 @@ ai gen --watch
 
 **Design:**
 ```bash
-ai init --template react-component
+dot init --template react-component
 # Creates ComponentTemplate.ai with best practices
 
-ai init --template api-endpoint
+dot init --template api-endpoint
 # Creates EndpointTemplate.ai
 ```
 
@@ -1146,7 +1146,7 @@ validation:
 
 **Design:**
 ```bash
-ai gen --track-cost
+dot gen --track-cost
 # Output:
 # Summary:
 #   ✓ 2 file(s) processed
@@ -1172,10 +1172,10 @@ ai gen --track-cost
 
 **Design:**
 ```bash
-ai gen --save-history
+dot gen --save-history
 # Saves artifacts before regeneration
 
-ai rollback Button.ai
+dot rollback Button.ai
 # Restores previous version of Button.ai artifacts
 ```
 

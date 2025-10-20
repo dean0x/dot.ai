@@ -1,10 +1,10 @@
 {
-  "name": "dotai",
+  "name": "@dean0x/dot",
   "version": "0.1.0",
-  "description": "Reactive AI-powered code generation from .ai specification files",
+  "description": "dot.ai - AI-powered code generation from .ai specification files",
   "main": "dist/index.js",
   "bin": {
-    "ai": "./dist/cli/index.js"
+    "dot": "./dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc",

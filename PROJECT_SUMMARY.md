@@ -13,13 +13,13 @@ A complete CLI tool that enables **declarative, AI-powered code generation** fro
 ```
 1. Write specification in Button.ai
    ↓
-2. Run: ai gen
+2. Run: dot gen
    ↓
 3. AI agent generates Button.tsx, Button.test.tsx
    ↓
 4. Edit Button.ai to add new requirement
    ↓
-5. Run: ai gen
+5. Run: dot gen
    ↓
 6. AI sees diff, updates existing files intelligently
 ```
@@ -92,7 +92,7 @@ dotai/
 ### Key Design Decisions
 
 **1. CLI Command Over File Watching**
-- Users explicitly run `ai gen` when ready
+- Users explicitly run `dot gen` when ready
 - No surprise API costs during active editing
 - Fits natural git workflow
 
@@ -163,32 +163,32 @@ Requirements:
 
 ## CLI Commands
 
-### `ai init`
+### `dot init`
 Initialize .dotai directory structure
 
-### `ai gen [path] [--force]`
+### `dot gen [path] [--force]`
 Generate code from .ai files
 - Detects changed files
 - Invokes configured agents
 - Updates artifacts lists
 - Saves state
 
-### `ai status [path]`
+### `dot status [path]`
 Show which .ai files changed (new/changed/unchanged)
 
-### `ai ls [path]`
+### `dot ls [path]`
 List all .ai files and their artifacts
 
-### `ai clean`
+### `dot clean`
 Clear all generation state (next gen regenerates everything)
 
 ## Testing Results
 
 ✅ All core functionality tested:
-- `ai init` - Creates .dotai structure
-- `ai ls` - Lists .ai files correctly
-- `ai status` - Detects new files
-- `ai clean` - Clears state
+- `dot init` - Creates .dotai structure
+- `dot ls` - Lists .ai files correctly
+- `dot status` - Detects new files
+- `dot clean` - Clears state
 - Build system works
 - TypeScript compilation successful
 - CLI help/version working
@@ -221,7 +221,7 @@ npm install -g dotai
 ### Quick Start
 ```bash
 # 1. Initialize
-ai init
+dot init
 
 # 2. Create a .ai file
 cat > Button.ai <<EOF
@@ -237,10 +237,10 @@ Create a React Button with TypeScript.
 EOF
 
 # 3. Generate
-ai gen
+dot gen
 
 # 4. Check what was created
-ai ls
+dot ls
 ```
 
 ### Iterative Development
@@ -250,10 +250,10 @@ vim Button.ai
 # Add: "- Include disabled state"
 
 # See what changed
-ai status
+dot status
 
 # Generate updates
-ai gen
+dot gen
 # AI sees the diff and updates existing files
 ```
 
@@ -364,9 +364,9 @@ Architecture.ai → docs/architecture.md, diagrams/
    ```bash
    mkdir my-project
    cd my-project
-   ai init
+   dot init
    # Create a .ai file
-   ai gen
+   dot gen
    ```
 
 ### To Extend This

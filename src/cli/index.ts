@@ -15,8 +15,8 @@ registerAgent(new ClaudeCodeAgent());
 const program = new Command();
 
 program
-  .name('ai')
-  .description('AI-powered code generation from .ai specification files')
+  .name('dot')
+  .description('dot.ai - AI-powered code generation from .ai specification files')
   .version('0.1.0');
 
 // Register commands

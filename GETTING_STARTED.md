@@ -42,7 +42,7 @@ Get your API key from: https://console.anthropic.com/
 ```bash
 mkdir my-project
 cd my-project
-ai init
+dot init
 ```
 
 You'll see:
@@ -84,7 +84,7 @@ Create a reusable Button component with TypeScript and React.
 ### Step 3: Generate Code
 
 ```bash
-ai gen
+dot gen
 ```
 
 Watch as dotai:
@@ -96,7 +96,7 @@ Watch as dotai:
 ### Step 4: Check What Was Created
 
 ```bash
-ai ls
+dot ls
 ```
 
 You'll see:
@@ -116,12 +116,12 @@ Edit Button.ai to add a new requirement:
 
 Check what changed:
 ```bash
-ai status
+dot status
 ```
 
 Generate the update:
 ```bash
-ai gen
+dot gen
 ```
 
 This time, dotai sends only the **diff** to claude-code, which intelligently updates your files.
@@ -135,7 +135,7 @@ This time, dotai sends only the **diff** to claude-code, which intelligently upd
 vim MyComponent.ai
 
 # 2. Generate
-ai gen
+dot gen
 
 # 3. Test the generated code
 npm test
@@ -148,33 +148,33 @@ npm test
 vim MyComponent.ai
 
 # 2. See what changed
-ai status
+dot status
 
 # 3. Generate updates
-ai gen
+dot gen
 ```
 
 ### Multiple Components
 
 ```bash
 # Process all .ai files in src/
-ai gen ./src
+dot gen ./src
 
 # Check status of all
-ai status ./src
+dot status ./src
 
 # List all .ai files and their artifacts
-ai ls ./src
+dot ls ./src
 ```
 
 ### Starting Fresh
 
 ```bash
 # Clear all state
-ai clean
+dot clean
 
 # Next gen will regenerate everything
-ai gen --force
+dot gen --force
 ```
 
 ## File Organization
@@ -295,11 +295,11 @@ export ANTHROPIC_API_KEY=your_key_here
 **Solution:**
 ```bash
 # Check current state
-ai ls
+dot ls
 
 # If wrong, force regenerate
-ai clean
-ai gen --force
+dot clean
+dot gen --force
 ```
 
 ## Advanced Usage
@@ -321,13 +321,13 @@ agent_config:
 
 ```bash
 # Only Button.ai
-ai gen Button.ai
+dot gen Button.ai
 
 # All in components/
-ai gen src/components/
+dot gen src/components/
 
 # Force regenerate specific file
-ai gen Button.ai --force
+dot gen Button.ai --force
 ```
 
 ## What's Next?
