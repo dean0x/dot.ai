@@ -18,7 +18,9 @@ export async function parseAiFile(filePath: string): Promise<AiFile> {
   const frontmatter = validateFrontmatter(parsed.data);
 
   // Calculate content hash for change detection
-  const hash = calculateHash(rawContent);
+  // IMPORTANT: Hash only the content portion (not frontmatter)
+  // The frontmatter is auto-updated by our tool and shouldn't trigger regeneration
+  const hash = calculateHash(parsed.content.trim());
 
   return {
     path: absolutePath,

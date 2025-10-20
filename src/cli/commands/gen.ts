@@ -12,6 +12,21 @@ interface GenOptions {
 }
 
 export async function genCommand(targetPath?: string, options: GenOptions = {}): Promise<void> {
+  // Handle Ctrl+C gracefully
+  let interrupted = false;
+  const handleInterrupt = () => {
+    if (!interrupted) {
+      interrupted = true;
+      console.log();
+      console.log(chalk.yellow('\n⚠ Generation interrupted by user'));
+      console.log(chalk.gray('State has been saved for completed files'));
+      process.exit(130); // Standard exit code for SIGINT
+    }
+  };
+
+  process.on('SIGINT', handleInterrupt);
+  process.on('SIGTERM', handleInterrupt);
+
   try {
     const searchPath = targetPath || '.';
     const cwd = process.cwd();
@@ -155,7 +170,15 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
     if (failCount > 0) {
       console.log(chalk.red(`  ✗ ${failCount} file(s) failed`));
     }
+
+    // Clean up signal handlers
+    process.off('SIGINT', handleInterrupt);
+    process.off('SIGTERM', handleInterrupt);
   } catch (error) {
+    // Clean up signal handlers
+    process.off('SIGINT', handleInterrupt);
+    process.off('SIGTERM', handleInterrupt);
+
     console.error(chalk.red('Error during generation:'), error);
     process.exit(1);
   }
