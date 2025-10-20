@@ -87,14 +87,36 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
         }
 
         // Combine detected artifacts with existing frontmatter artifacts
-        const allArtifacts = [
+        let allArtifacts = [
           ...new Set([...aiFile.frontmatter.artifacts, ...result.artifacts]),
         ];
+
+        // Fallback: Scan file system for new files if no artifacts detected
+        if (allArtifacts.length === 0) {
+          console.log(chalk.gray(`  No artifacts detected from output, scanning file system...`));
+          const fs = await import('fs/promises');
+          const filesBefore = previousState?.artifacts || [];
+
+          // Get all files in current directory (excluding .dotai and .ai files)
+          const entries = await fs.readdir(cwd, { withFileTypes: true });
+          const filesNow = entries
+            .filter(e => e.isFile() && !e.name.endsWith('.ai') && e.name !== '.gitignore')
+            .map(e => e.name);
+
+          // Find new files that weren't there before
+          const newFiles = filesNow.filter(f => !filesBefore.includes(f));
+          if (newFiles.length > 0) {
+            allArtifacts = [...new Set([...filesBefore, ...newFiles])];
+            console.log(chalk.gray(`  Found ${newFiles.length} new file(s) via filesystem scan`));
+          }
+        }
 
         // Update artifacts in .ai file frontmatter
         if (allArtifacts.length > 0) {
           await updateArtifacts(aiFile.path, allArtifacts);
-          console.log(chalk.gray(`  Updated artifacts (${allArtifacts.length} file(s))`));
+          console.log(chalk.green(`  ✓ Tracked ${allArtifacts.length} artifact(s)`));
+        } else {
+          console.log(chalk.yellow(`  ⚠ No artifacts detected`));
         }
 
         // Update state
