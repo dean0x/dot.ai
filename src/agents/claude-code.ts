@@ -105,12 +105,20 @@ export class ClaudeCodeAgent implements CodingAgent {
       let stdout = '';
       let stderr = '';
 
+      // Stream stdout to console while capturing
       proc.stdout.on('data', (data) => {
-        stdout += data.toString();
+        const chunk = data.toString();
+        stdout += chunk;
+        // Stream to console in real-time
+        process.stdout.write(chunk);
       });
 
+      // Stream stderr to console while capturing
       proc.stderr.on('data', (data) => {
-        stderr += data.toString();
+        const chunk = data.toString();
+        stderr += chunk;
+        // Stream to console in real-time
+        process.stderr.write(chunk);
       });
 
       proc.on('close', (code) => {

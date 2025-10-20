@@ -80,6 +80,11 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
           existingArtifacts: previousState?.artifacts,
         });
 
+        // Clear separator after agent output
+        console.log();
+        console.log(chalk.gray(`  ─────────────────────────────────`));
+        console.log(chalk.gray(`  Agent completed`));
+
         if (!result.success) {
           console.log(chalk.red(`  ✗ Failed: ${result.error}`));
           failCount++;
