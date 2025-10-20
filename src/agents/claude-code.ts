@@ -2,6 +2,107 @@ import { spawn } from 'child_process';
 import { CodingAgent, GenerationResult, InvokeOptions } from '../types';
 
 /**
+ * Security: Whitelisted allowed models to prevent command injection
+ */
+const ALLOWED_MODELS = [
+  'claude-sonnet-4',
+  'claude-sonnet-4-5',
+  'claude-sonnet-4-5-20250929',
+  'claude-opus-4',
+  'claude-haiku-4',
+  'sonnet',
+  'opus',
+  'haiku',
+];
+
+/**
+ * Security: Whitelisted permission modes
+ */
+const ALLOWED_PERMISSION_MODES = ['acceptEdits', 'bypassPermissions', 'default', 'plan'];
+
+/**
+ * Security: Validate tool name format to prevent injection
+ * Tool names must be alphanumeric with underscores, optionally prefixed with mcp__
+ */
+const TOOL_NAME_REGEX = /^(mcp__)?[a-zA-Z][a-zA-Z0-9_]*$/;
+
+/**
+ * Security: Validate that a string doesn't contain shell metacharacters
+ */
+function isValidToolList(tools: string): boolean {
+  // Tool lists should be comma-separated tool names, possibly with args in parentheses
+  // Format: "Tool1,Tool2(arg1:pattern),Tool3"
+  // We need to ensure no shell metacharacters like ; | & $ ` \ etc.
+
+  // Split by comma and validate each tool
+  const toolParts = tools.split(',').map(t => t.trim());
+
+  for (const tool of toolParts) {
+    // Extract tool name (before any parenthesis)
+    const toolName = tool.split('(')[0].trim();
+
+    // Validate tool name format
+    if (!TOOL_NAME_REGEX.test(toolName)) {
+      return false;
+    }
+
+    // If there are arguments, validate they don't contain dangerous characters
+    if (tool.includes('(')) {
+      // Check for shell metacharacters
+      if (/[;&|`$\\<>]/.test(tool)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Security: Validate model name
+ */
+function validateModel(model: string): string {
+  if (!ALLOWED_MODELS.includes(model)) {
+    throw new Error(
+      `Invalid model: "${model}". Allowed models: ${ALLOWED_MODELS.join(', ')}`
+    );
+  }
+  return model;
+}
+
+/**
+ * Security: Validate permission mode
+ */
+function validatePermissionMode(mode: string): string {
+  if (!ALLOWED_PERMISSION_MODES.includes(mode)) {
+    throw new Error(
+      `Invalid permission_mode: "${mode}". Allowed modes: ${ALLOWED_PERMISSION_MODES.join(', ')}`
+    );
+  }
+  return mode;
+}
+
+/**
+ * Security: Validate tool list
+ */
+function validateToolList(tools: string): string {
+  if (!isValidToolList(tools)) {
+    throw new Error(
+      `Invalid tool list: "${tools}". Tool names must be alphanumeric with underscores.`
+    );
+  }
+  return tools;
+}
+
+/**
+ * Security: Sanitize system prompt to prevent injection attacks
+ */
+function sanitizeSystemPrompt(prompt: string): string {
+  // Remove any null bytes or control characters that could cause issues
+  return prompt.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+}
+
+/**
  * Claude Code agent implementation
  */
 export class ClaudeCodeAgent implements CodingAgent {
@@ -86,41 +187,53 @@ export class ClaudeCodeAgent implements CodingAgent {
         '--permission-mode', 'acceptEdits', // Auto-accept file edits in headless mode
       ];
 
-      // Add agent-specific configuration
+      // Add agent-specific configuration with security validation
       if (options.agentConfig) {
         const config = options.agentConfig as Record<string, unknown>;
 
+        // Security: Validate model name against whitelist
         if (config.model) {
-          args.push('--model', String(config.model));
+          const model = validateModel(String(config.model));
+          args.push('--model', model);
         }
 
+        // Security: Validate tool list format
         if (config.allowedTools) {
-          args.push('--allowedTools', String(config.allowedTools));
+          const tools = validateToolList(String(config.allowedTools));
+          args.push('--allowedTools', tools);
         }
 
+        // Security: Validate tool list format
         if (config.disallowedTools) {
-          args.push('--disallowedTools', String(config.disallowedTools));
+          const tools = validateToolList(String(config.disallowedTools));
+          args.push('--disallowedTools', tools);
         }
 
+        // Security: Sanitize system prompt
         if (config.appendSystemPrompt) {
-          args.push('--append-system-prompt', String(config.appendSystemPrompt));
+          const prompt = sanitizeSystemPrompt(String(config.appendSystemPrompt));
+          args.push('--append-system-prompt', prompt);
         }
 
         // Note: --verbose is already added by default for stream-json
         // This is kept for backward compatibility if we change output format
 
+        // Security: Validate fallback model name against whitelist
         if (config.fallbackModel) {
-          args.push('--fallback-model', String(config.fallbackModel));
+          const model = validateModel(String(config.fallbackModel));
+          args.push('--fallback-model', model);
         }
 
+        // Security: Validate permission mode against whitelist
         // Override default permission mode if specified
         if (config.permission_mode) {
+          const mode = validatePermissionMode(String(config.permission_mode));
           // Remove the default we added above
           const permIdx = args.indexOf('--permission-mode');
           if (permIdx !== -1) {
             args.splice(permIdx, 2);
           }
-          args.push('--permission-mode', String(config.permission_mode));
+          args.push('--permission-mode', mode);
         }
       }
 

@@ -5,10 +5,34 @@ import matter from 'gray-matter';
 import { AiFile, AiFileFrontmatter } from '../types';
 
 /**
+ * Security: Validate that a file path is within the allowed base directory
+ * Prevents path traversal attacks like ../../../../etc/passwd
+ */
+function validatePathWithinBase(filePath: string, baseDir: string = process.cwd()): string {
+  // Resolve both paths to absolute form
+  const resolvedPath = path.resolve(filePath);
+  const resolvedBase = path.resolve(baseDir);
+
+  // Get relative path from base to target
+  const relativePath = path.relative(resolvedBase, resolvedPath);
+
+  // If the relative path starts with .., it's trying to escape the base directory
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    throw new Error(
+      `Security: Path "${filePath}" is outside the allowed directory. ` +
+      `All file operations must stay within the project directory.`
+    );
+  }
+
+  return resolvedPath;
+}
+
+/**
  * Parse a .ai file and extract frontmatter + content
  */
 export async function parseAiFile(filePath: string): Promise<AiFile> {
-  const absolutePath = path.resolve(filePath);
+  // Security: Validate path stays within project directory
+  const absolutePath = validatePathWithinBase(filePath);
   const rawContent = await fs.readFile(absolutePath, 'utf-8');
 
   // Parse frontmatter using gray-matter
@@ -75,7 +99,10 @@ export function calculateHash(content: string): string {
  * Update the artifacts list in a .ai file's frontmatter
  */
 export async function updateArtifacts(filePath: string, artifacts: string[]): Promise<void> {
-  const rawContent = await fs.readFile(filePath, 'utf-8');
+  // Security: Validate path stays within project directory
+  const validatedPath = validatePathWithinBase(filePath);
+
+  const rawContent = await fs.readFile(validatedPath, 'utf-8');
   const parsed = matter(rawContent);
 
   // Update artifacts in frontmatter
@@ -85,7 +112,7 @@ export async function updateArtifacts(filePath: string, artifacts: string[]): Pr
   const updated = matter.stringify(parsed.content, parsed.data);
 
   // Write back to file
-  await fs.writeFile(filePath, updated, 'utf-8');
+  await fs.writeFile(validatedPath, updated, 'utf-8');
 }
 
 /**
