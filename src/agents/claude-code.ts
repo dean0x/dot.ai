@@ -28,28 +28,39 @@ export class ClaudeCodeAgent implements CodingAgent {
 
   parseOutput(rawOutput: string): string[] {
     try {
-      // Parse JSON output from claude-code
-      const json = JSON.parse(rawOutput);
-
       const artifacts = new Set<string>();
+      let resultText = '';
 
-      // Extract file paths from the result text
-      // Claude-code mentions file paths in the result string
-      if (json.result && typeof json.result === 'string') {
-        // Match patterns like: "Created file.ts", "file.ts created", "/path/to/file.ts"
-        // Look for common file extensions
-        const filePattern = /(?:^|\s|`)([A-Za-z0-9_.-]+\.(ts|tsx|js|jsx|py|rs|go|java|cpp|c|h|css|scss|html|json|yaml|yml|md|txt|sh))(?:$|\s|`)/g;
-        const matches = json.result.matchAll(filePattern);
-        for (const match of matches) {
-          artifacts.add(match[1]);
+      // Parse stream-json output (newline-delimited JSON)
+      const lines = rawOutput.split('\n').filter((line: string) => line.trim());
+
+      for (const line of lines) {
+        try {
+          const json = JSON.parse(line);
+
+          // Get the final result text
+          if (json.type === 'result' && json.result) {
+            resultText = json.result;
+          }
+        } catch {
+          // Skip invalid JSON lines
+          continue;
         }
       }
 
-      // Also try to extract absolute paths
-      if (json.result && typeof json.result === 'string') {
-        const absolutePathPattern = /`([^`]+\.(ts|tsx|js|jsx|py|rs|go|java|cpp|c|h|css|scss|html|json|yaml|yml|md|txt|sh))`/g;
-        const matches = json.result.matchAll(absolutePathPattern);
+      // Extract file paths from the result text
+      if (resultText) {
+        // Match patterns like: "Created file.ts", "file.ts created", "/path/to/file.ts"
+        const filePattern = /(?:^|\s|`)([A-Za-z0-9_.-]+\.(ts|tsx|js|jsx|py|rs|go|java|cpp|c|h|css|scss|html|json|yaml|yml|md|txt|sh))(?:$|\s|`)/g;
+        const matches = resultText.matchAll(filePattern);
         for (const match of matches) {
+          artifacts.add(match[1]);
+        }
+
+        // Also try to extract absolute paths
+        const absolutePathPattern = /`([^`]+\.(ts|tsx|js|jsx|py|rs|go|java|cpp|c|h|css|scss|html|json|yaml|yml|md|txt|sh))`/g;
+        const absoluteMatches = resultText.matchAll(absolutePathPattern);
+        for (const match of absoluteMatches) {
           // Extract just the filename from absolute paths
           const filename = match[1].split('/').pop();
           if (filename) {
@@ -60,7 +71,7 @@ export class ClaudeCodeAgent implements CodingAgent {
 
       return Array.from(artifacts);
     } catch {
-      // If JSON parsing fails, return empty array
+      // If parsing fails, return empty array
       return [];
     }
   }
@@ -70,7 +81,8 @@ export class ClaudeCodeAgent implements CodingAgent {
       const args = [
         '-p', // Print mode (headless, already non-interactive)
         prompt,
-        '--output-format', 'json',
+        '--output-format', 'stream-json', // Stream output in real-time
+        '--verbose', // Required for stream-json with --print
         '--permission-mode', 'acceptEdits', // Auto-accept file edits in headless mode
       ];
 
@@ -94,9 +106,8 @@ export class ClaudeCodeAgent implements CodingAgent {
           args.push('--append-system-prompt', String(config.appendSystemPrompt));
         }
 
-        if (config.verbose) {
-          args.push('--verbose');
-        }
+        // Note: --verbose is already added by default for stream-json
+        // This is kept for backward compatibility if we change output format
 
         if (config.fallbackModel) {
           args.push('--fallback-model', String(config.fallbackModel));
@@ -120,13 +131,44 @@ export class ClaudeCodeAgent implements CodingAgent {
 
       let stdout = '';
       let stderr = '';
+      let lastResult = '';
 
       // Stream stdout to console while capturing
       proc.stdout.on('data', (data) => {
         const chunk = data.toString();
         stdout += chunk;
-        // Stream to console in real-time
-        process.stdout.write(chunk);
+
+        // Parse stream-json chunks for readable display
+        const lines = chunk.split('\n').filter((line: string) => line.trim());
+        for (const line of lines) {
+          try {
+            const json = JSON.parse(line);
+
+            if (json.type === 'init') {
+              // Session initialized
+              process.stdout.write(`\n`);
+            } else if (json.type === 'assistant' && json.message?.content) {
+              // Assistant message chunk - display readable content
+              for (const content of json.message.content) {
+                if (content.type === 'text' && content.text) {
+                  // Display text content with proper formatting
+                  process.stdout.write(`  ${content.text}\n\n`);
+                } else if (content.type === 'tool_use') {
+                  // Show tool usage
+                  process.stdout.write(`  [Using tool: ${content.name}]\n`);
+                }
+              }
+            } else if (json.type === 'result') {
+              // Final result
+              lastResult = json.result || '';
+              if (json.is_error) {
+                process.stderr.write(`\n  Error: ${lastResult}\n`);
+              }
+            }
+          } catch {
+            // Not valid JSON, might be partial chunk
+          }
+        }
       });
 
       // Stream stderr to console while capturing
