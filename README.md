@@ -1,22 +1,22 @@
-# Dot.ai File System
+# dot.ai
 
 AI-powered code generation from `.ai` specification files.
 
 ## Overview
 
-`Dot.ai` enables you to create **reactive specifications** that generate code artifacts. Write your requirements in `.ai` files (Markdown with YAML frontmatter), and let AI coding agents implement them.
+`dot.ai` enables you to create **reactive specifications** that generate code artifacts. Write your requirements in `.ai` files (Markdown with YAML frontmatter), and let AI coding agents implement them.
 
 ### Key Concepts
 
 - **`.ai` files**: Living specification documents (Markdown + YAML frontmatter)
-- **Artifacts**: Generated code files tracked and managed by dotai
+- **Artifacts**: Generated code files tracked and managed by dot.ai
 - **Agents**: Pluggable coding agents (claude-code, cursor, aider, etc.)
 - **State tracking**: Hash-based change detection for efficient regeneration
 
 ## Installation
 
 ```bash
-npm install -g dotai
+npm install -g @dean0x/dot
 ```
 
 ## Quick Start
@@ -24,7 +24,7 @@ npm install -g dotai
 ### 1. Initialize a project
 
 ```bash
-ai init
+dot init
 ```
 
 This creates:
@@ -57,7 +57,7 @@ Requirements:
 ### 3. Generate code
 
 ```bash
-ai gen
+dot gen
 ```
 
 This will:
@@ -91,14 +91,14 @@ Requirements:
 - Full test coverage
 ```
 
-Run `ai gen` again - it will send the **diff** to claude-code to implement just the changes.
+Run `dot gen` again - it will send the **diff** to claude-code to implement just the changes.
 
 ## CLI Commands
 
-### `ai init`
+### `dot init`
 Initialize `.dotai` directory structure in current project.
 
-### `ai gen [path]`
+### `dot gen [path]`
 Generate code from `.ai` files.
 
 **Options:**
@@ -106,32 +106,32 @@ Generate code from `.ai` files.
 
 **Examples:**
 ```bash
-ai gen              # Process changed .ai files in current directory
-ai gen ./src        # Process changed .ai files in ./src
-ai gen --force      # Regenerate everything
+dot gen              # Process changed .ai files in current directory
+dot gen ./src        # Process changed .ai files in ./src
+dot gen --force      # Regenerate everything
 ```
 
-### `ai status [path]`
+### `dot status [path]`
 Show which `.ai` files have changed.
 
 ```bash
-ai status           # Check current directory
-ai status ./src     # Check specific directory
+dot status           # Check current directory
+dot status ./src     # Check specific directory
 ```
 
-### `ai ls [path]`
+### `dot ls [path]`
 List all `.ai` files and their artifacts.
 
 ```bash
-ai ls               # List all .ai files
-ai ls ./src         # List .ai files in ./src
+dot ls               # List all .ai files
+dot ls ./src         # List .ai files in ./src
 ```
 
-### `ai clean`
-Clear all generation state. Next `ai gen` will regenerate everything.
+### `dot clean`
+Clear all generation state. Next `dot gen` will regenerate everything.
 
 ```bash
-ai clean
+dot clean
 ```
 
 ## `.ai` File Format
@@ -177,25 +177,25 @@ agent_config:
 ### First Generation
 
 1. You create `Component.ai` with `artifacts: []`
-2. Run `ai gen`
-3. dotai sends the spec to the agent
+2. Run `dot gen`
+3. dot.ai sends the spec to the agent
 4. Agent generates files (e.g., `Component.tsx`, `Component.test.tsx`)
-5. dotai updates `artifacts:` list in `Component.ai`
+5. dot.ai updates `artifacts:` list in `Component.ai`
 6. State is saved in `.dotai/state.json`
 
 ### Subsequent Updates
 
 1. You edit `Component.ai` specification
-2. Run `ai gen`
-3. dotai detects changes (hash-based)
-4. dotai generates **diff** of spec changes
-5. dotai sends diff + existing artifacts to agent
+2. Run `dot gen`
+3. dot.ai detects changes (hash-based)
+4. dot.ai generates **diff** of spec changes
+5. dot.ai sends diff + existing artifacts to agent
 6. Agent implements changes (preserving manual edits where sensible)
-7. dotai updates artifacts list and state
+7. dot.ai updates artifacts list and state
 
 ### Manual Edits to Artifacts
 
-Artifacts are **editable**! When you run `ai gen` after editing both the spec and artifacts:
+Artifacts are **editable**! When you run `dot gen` after editing both the spec and artifacts:
 - The agent receives the current artifact state
 - The agent sees the spec diff
 - The agent intelligently merges changes
@@ -353,8 +353,8 @@ The agent may have failed to output valid JSON. Check:
 ### Build from source
 
 ```bash
-git clone https://github.com/yourusername/dotai.git
-cd dotai
+git clone https://github.com/dean0x/dot.ai.git
+cd dot.ai
 npm install
 npm run build
 npm link
