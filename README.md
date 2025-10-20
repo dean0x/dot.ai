@@ -197,10 +197,25 @@ Each agent supports different configuration options:
 **claude-code:**
 ```yaml
 agent_config:
-  model: claude-sonnet-4
-  allowedTools: "Read,Write,Edit,Bash"
-  permission_mode: acceptEdits
+  # Model selection
+  model: claude-sonnet-4                    # Model to use (default: from config)
+  fallbackModel: claude-opus-4              # Fallback if primary overloaded
+
+  # Tool permissions
+  allowedTools: "Read,Write,Edit,Bash"      # Comma-separated allowed tools
+  disallowedTools: "WebSearch"              # Comma-separated denied tools
+
+  # Permission handling
+  permission_mode: acceptEdits              # acceptEdits | bypassPermissions | default | plan
+
+  # System prompts
+  appendSystemPrompt: "Follow clean code principles"  # Additional context
+
+  # Debugging
+  verbose: true                             # Enable verbose logging
 ```
+
+All fields are optional. See [Claude Code headless docs](https://docs.claude.com/en/docs/claude-code/headless) for details.
 
 ## How It Works
 

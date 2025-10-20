@@ -86,6 +86,22 @@ export class ClaudeCodeAgent implements CodingAgent {
           args.push('--allowedTools', String(config.allowedTools));
         }
 
+        if (config.disallowedTools) {
+          args.push('--disallowedTools', String(config.disallowedTools));
+        }
+
+        if (config.appendSystemPrompt) {
+          args.push('--append-system-prompt', String(config.appendSystemPrompt));
+        }
+
+        if (config.verbose) {
+          args.push('--verbose');
+        }
+
+        if (config.fallbackModel) {
+          args.push('--fallback-model', String(config.fallbackModel));
+        }
+
         // Override default permission mode if specified
         if (config.permission_mode) {
           // Remove the default we added above
