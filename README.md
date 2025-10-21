@@ -262,7 +262,7 @@ Artifacts are **editable**! When you run `dot gen` after editing both the spec a
 
 ```json
 {
-  "version": "1.0.0",
+  "version": "0.1.0",
   "files": {
     "/path/to/Button.ai": {
       "lastHash": "a1b2c3...",
@@ -276,6 +276,42 @@ Artifacts are **editable**! When you run `dot gen` after editing both the spec a
 
 ## Architecture
 
+### Core Principles
+
+dotai follows functional programming principles:
+
+**Result Types for Explicit Error Handling:**
+```typescript
+import { Result, Ok, Err, isErr } from './utils/result';
+
+// Functions return Result<T, E> instead of throwing
+const result = await parserService.parseAiFile(filePath);
+if (isErr(result)) {
+  console.error('Parse error:', result.error.message);
+  return;
+}
+const aiFile = result.value; // Type-safe access
+```
+
+**Dependency Injection for Testability:**
+```typescript
+// Services accept interfaces, not concrete implementations
+const fs = new NodeFileSystem();
+const hasher = new CryptoHasher();
+const parserService = new ParserService(fs, hasher);
+```
+
+**Pure Functions Separated from I/O:**
+```typescript
+// parser-core.ts - Pure, no I/O
+export function validatePathWithinBase(filePath: string): Result<string, SecurityError>
+
+// parser-service.ts - Orchestrates I/O
+export class ParserService {
+  async parseAiFile(filePath: string): Promise<Result<AiFile, DotAiError>>
+}
+```
+
 ### Pluggable Agents
 
 dotai uses an agent abstraction to support multiple coding CLIs:
@@ -286,6 +322,16 @@ interface CodingAgent {
   invoke(prompt: string, options: InvokeOptions): Promise<GenerationResult>;
   parseOutput(rawOutput: string): string[];
 }
+
+// Usage with Result types
+import { getAgent } from './agents/interface';
+
+const agentResult = getAgent('claude-code');
+if (isErr(agentResult)) {
+  console.error('Agent not found:', agentResult.error.message);
+  return;
+}
+const agent = agentResult.value;
 ```
 
 Currently supported:

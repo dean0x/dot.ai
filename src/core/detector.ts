@@ -1,8 +1,18 @@
+/**
+ * Change detector module - Pure change detection logic
+ *
+ * All functions are pure - no I/O, no side effects, deterministic.
+ * These functions categorize AiFiles based on state comparison.
+ */
+
 import { AiFile, DotAiState, ChangeDetectionResult } from '../types';
-import { getFileState } from './state';
+import { getFileState } from './state-core';
 
 /**
  * Detect which .ai files have changed since last generation
+ *
+ * PURE: Deterministic categorization based on hash comparison
+ * Cannot fail - always returns valid ChangeDetectionResult
  */
 export function detectChanges(aiFiles: AiFile[], state: DotAiState, force: boolean = false): ChangeDetectionResult {
   const changed: AiFile[] = [];
@@ -40,6 +50,8 @@ export function detectChanges(aiFiles: AiFile[], state: DotAiState, force: boole
 
 /**
  * Check if there are any changes to process
+ *
+ * PURE: Simple boolean check, cannot fail
  */
 export function hasChanges(result: ChangeDetectionResult): boolean {
   return result.changed.length > 0 || result.new.length > 0;
@@ -47,13 +59,17 @@ export function hasChanges(result: ChangeDetectionResult): boolean {
 
 /**
  * Get all files that need processing (changed + new)
+ *
+ * PURE: Array concatenation, cannot fail
  */
 export function getFilesToProcess(result: ChangeDetectionResult): AiFile[] {
   return [...result.new, ...result.changed];
 }
 
 /**
- * Get a summary of changes
+ * Get a summary of changes for display
+ *
+ * PURE: String formatting, cannot fail
  */
 export function getChangeSummary(result: ChangeDetectionResult): string {
   const lines: string[] = [];

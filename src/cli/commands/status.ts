@@ -1,16 +1,31 @@
 import chalk from 'chalk';
-import { findAiFiles, parseAiFile } from '../../core/parser';
-import { loadState } from '../../core/state';
+import { ParserService } from '../../core/parser-service';
+import { StateService } from '../../core/state-service';
+import { NodeFileSystem } from '../../infrastructure/fs-adapter';
+import { CryptoHasher } from '../../infrastructure/hasher-adapter';
 import { detectChanges } from '../../core/detector';
+import { isErr } from '../../utils/result';
 
 export async function statusCommand(targetPath?: string): Promise<void> {
   try {
     const searchPath = targetPath || '.';
+    const cwd = process.cwd();
 
     console.log(chalk.blue(`Scanning for .ai files in ${searchPath}...`));
 
+    // Create services with DI
+    const fs = new NodeFileSystem();
+    const hasher = new CryptoHasher();
+    const parserService = new ParserService(fs, hasher);
+    const stateService = new StateService(fs);
+
     // Find all .ai files
-    const aiFilePaths = await findAiFiles(searchPath);
+    const findResult = await parserService.findAiFiles(searchPath);
+    if (isErr(findResult)) {
+      console.error(chalk.red('Error finding .ai files:'), findResult.error.message);
+      process.exit(1);
+    }
+    const aiFilePaths = findResult.value;
 
     if (aiFilePaths.length === 0) {
       console.log(chalk.yellow('No .ai files found'));
@@ -21,10 +36,25 @@ export async function statusCommand(targetPath?: string): Promise<void> {
     console.log();
 
     // Parse all .ai files
-    const aiFiles = await Promise.all(aiFilePaths.map(parseAiFile));
+    const parseResults = await Promise.all(aiFilePaths.map(p => parserService.parseAiFile(p)));
+
+    // Check for errors and collect successful parses
+    const aiFiles = [];
+    for (const result of parseResults) {
+      if (isErr(result)) {
+        console.error(chalk.red(`Error parsing file: ${result.error.message}`));
+        continue;
+      }
+      aiFiles.push(result.value);
+    }
 
     // Load state
-    const state = await loadState();
+    const stateResult = await stateService.loadState(cwd);
+    if (isErr(stateResult)) {
+      console.error(chalk.red('Error loading state:'), stateResult.error.message);
+      process.exit(1);
+    }
+    const state = stateResult.value;
 
     // Detect changes
     const changes = detectChanges(aiFiles, state);

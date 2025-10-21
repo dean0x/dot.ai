@@ -1,5 +1,7 @@
 import { spawn } from 'child_process';
 import { CodingAgent, GenerationResult, InvokeOptions } from '../types';
+import { Result, Ok, Err } from '../utils/result';
+import { ValidationError } from '../types/errors';
 
 /**
  * Security: Whitelisted allowed models to prevent command injection
@@ -61,37 +63,49 @@ function isValidToolList(tools: string): boolean {
 /**
  * Security: Validate model name
  */
-function validateModel(model: string): string {
+function validateModel(model: string): Result<string, ValidationError> {
   if (!ALLOWED_MODELS.includes(model)) {
-    throw new Error(
-      `Invalid model: "${model}". Allowed models: ${ALLOWED_MODELS.join(', ')}`
+    return new Err(
+      new ValidationError(
+        `Invalid model: "${model}". Allowed models: ${ALLOWED_MODELS.join(', ')}`,
+        'INVALID_MODEL',
+        { model, allowedModels: ALLOWED_MODELS }
+      )
     );
   }
-  return model;
+  return new Ok(model);
 }
 
 /**
  * Security: Validate permission mode
  */
-function validatePermissionMode(mode: string): string {
+function validatePermissionMode(mode: string): Result<string, ValidationError> {
   if (!ALLOWED_PERMISSION_MODES.includes(mode)) {
-    throw new Error(
-      `Invalid permission_mode: "${mode}". Allowed modes: ${ALLOWED_PERMISSION_MODES.join(', ')}`
+    return new Err(
+      new ValidationError(
+        `Invalid permission_mode: "${mode}". Allowed modes: ${ALLOWED_PERMISSION_MODES.join(', ')}`,
+        'INVALID_PERMISSION_MODE',
+        { mode, allowedModes: ALLOWED_PERMISSION_MODES }
+      )
     );
   }
-  return mode;
+  return new Ok(mode);
 }
 
 /**
  * Security: Validate tool list
  */
-function validateToolList(tools: string): string {
+function validateToolList(tools: string): Result<string, ValidationError> {
   if (!isValidToolList(tools)) {
-    throw new Error(
-      `Invalid tool list: "${tools}". Tool names must be alphanumeric with underscores.`
+    return new Err(
+      new ValidationError(
+        `Invalid tool list: "${tools}". Tool names must be alphanumeric with underscores.`,
+        'INVALID_CONFIG',
+        { tools }
+      )
     );
   }
-  return tools;
+  return new Ok(tools);
 }
 
 /**
@@ -193,20 +207,29 @@ export class ClaudeCodeAgent implements CodingAgent {
 
         // Security: Validate model name against whitelist
         if (config.model) {
-          const model = validateModel(String(config.model));
-          args.push('--model', model);
+          const modelResult = validateModel(String(config.model));
+          if (modelResult.ok === false) {
+            throw new Error(modelResult.error.message);
+          }
+          args.push('--model', modelResult.value);
         }
 
         // Security: Validate tool list format
         if (config.allowedTools) {
-          const tools = validateToolList(String(config.allowedTools));
-          args.push('--allowedTools', tools);
+          const toolsResult = validateToolList(String(config.allowedTools));
+          if (toolsResult.ok === false) {
+            throw new Error(toolsResult.error.message);
+          }
+          args.push('--allowedTools', toolsResult.value);
         }
 
         // Security: Validate tool list format
         if (config.disallowedTools) {
-          const tools = validateToolList(String(config.disallowedTools));
-          args.push('--disallowedTools', tools);
+          const toolsResult = validateToolList(String(config.disallowedTools));
+          if (toolsResult.ok === false) {
+            throw new Error(toolsResult.error.message);
+          }
+          args.push('--disallowedTools', toolsResult.value);
         }
 
         // Security: Sanitize system prompt
@@ -220,20 +243,26 @@ export class ClaudeCodeAgent implements CodingAgent {
 
         // Security: Validate fallback model name against whitelist
         if (config.fallbackModel) {
-          const model = validateModel(String(config.fallbackModel));
-          args.push('--fallback-model', model);
+          const modelResult = validateModel(String(config.fallbackModel));
+          if (modelResult.ok === false) {
+            throw new Error(modelResult.error.message);
+          }
+          args.push('--fallback-model', modelResult.value);
         }
 
         // Security: Validate permission mode against whitelist
         // Override default permission mode if specified
         if (config.permission_mode) {
-          const mode = validatePermissionMode(String(config.permission_mode));
+          const modeResult = validatePermissionMode(String(config.permission_mode));
+          if (modeResult.ok === false) {
+            throw new Error(modeResult.error.message);
+          }
           // Remove the default we added above
           const permIdx = args.indexOf('--permission-mode');
           if (permIdx !== -1) {
             args.splice(permIdx, 2);
           }
-          args.push('--permission-mode', mode);
+          args.push('--permission-mode', modeResult.value);
         }
       }
 

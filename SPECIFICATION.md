@@ -1,6 +1,6 @@
 # .ai File System Specification
 
-**Version:** 1.0.0
+**Version:** 0.1.0
 **Status:** Implemented
 **Last Updated:** 2025-10-19
 
@@ -279,7 +279,7 @@ Create a reusable Button component with TypeScript and React.
 **Structure:**
 ```typescript
 interface DotAiState {
-  version: string;  // State format version (e.g., "1.0.0")
+  version: string;  // State format version (e.g., "0.1.0")
   files: Record<string, AiFileState>;
 }
 
@@ -294,7 +294,7 @@ interface AiFileState {
 **Example:**
 ```json
 {
-  "version": "1.0.0",
+  "version": "0.1.0",
   "files": {
     "/workspace/project/src/Button.ai": {
       "lastHash": "a1b2c3d4e5f6...",
@@ -1369,7 +1369,7 @@ CREATE INDEX idx_users_email ON users(email);
 
 ## Version History
 
-**1.0.0** (2025-10-19)
+**0.1.0** (2025-10-19)
 - Initial specification
 - Core concepts defined
 - Architecture documented

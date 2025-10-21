@@ -1,5 +1,8 @@
 import chalk from 'chalk';
-import { findAiFiles, parseAiFile } from '../../core/parser';
+import { ParserService } from '../../core/parser-service';
+import { NodeFileSystem } from '../../infrastructure/fs-adapter';
+import { CryptoHasher } from '../../infrastructure/hasher-adapter';
+import { isErr } from '../../utils/result';
 
 export async function lsCommand(targetPath?: string): Promise<void> {
   try {
@@ -8,8 +11,18 @@ export async function lsCommand(targetPath?: string): Promise<void> {
     console.log(chalk.blue(`Listing .ai files in ${searchPath}...`));
     console.log();
 
+    // Create services with DI
+    const fs = new NodeFileSystem();
+    const hasher = new CryptoHasher();
+    const parserService = new ParserService(fs, hasher);
+
     // Find all .ai files
-    const aiFilePaths = await findAiFiles(searchPath);
+    const findResult = await parserService.findAiFiles(searchPath);
+    if (isErr(findResult)) {
+      console.error(chalk.red('Error finding .ai files:'), findResult.error.message);
+      process.exit(1);
+    }
+    const aiFilePaths = findResult.value;
 
     if (aiFilePaths.length === 0) {
       console.log(chalk.yellow('No .ai files found'));
@@ -17,7 +30,17 @@ export async function lsCommand(targetPath?: string): Promise<void> {
     }
 
     // Parse all .ai files
-    const aiFiles = await Promise.all(aiFilePaths.map(parseAiFile));
+    const parseResults = await Promise.all(aiFilePaths.map(p => parserService.parseAiFile(p)));
+
+    // Check for errors and collect successful parses
+    const aiFiles = [];
+    for (const result of parseResults) {
+      if (isErr(result)) {
+        console.error(chalk.red(`Error parsing file: ${result.error.message}`));
+        continue;
+      }
+      aiFiles.push(result.value);
+    }
 
     // Display each file with its artifacts
     for (const aiFile of aiFiles) {

@@ -1,11 +1,15 @@
 import chalk from 'chalk';
 import * as path from 'path';
-import { findAiFiles, parseAiFile, updateArtifacts } from '../../core/parser';
-import { loadState, saveState, updateFileState, getFileState } from '../../core/state';
+import { ParserService } from '../../core/parser-service';
+import { StateService } from '../../core/state-service';
+import { NodeFileSystem } from '../../infrastructure/fs-adapter';
+import { CryptoHasher } from '../../infrastructure/hasher-adapter';
+import { getFileState, updateFileState } from '../../core/state-core';
 import { detectChanges, hasChanges, getFilesToProcess } from '../../core/detector';
 import { buildPrompt } from '../../core/prompt';
 import { getAgent } from '../../agents/interface';
 import { AiFile, AiFileState, DotAiState } from '../../types';
+import { isErr } from '../../utils/result';
 
 interface GenOptions {
   force?: boolean;
@@ -33,8 +37,19 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
 
     console.log(chalk.blue(`Scanning for .ai files in ${searchPath}...`));
 
+    // Create services with DI
+    const fs = new NodeFileSystem();
+    const hasher = new CryptoHasher();
+    const parserService = new ParserService(fs, hasher);
+    const stateService = new StateService(fs);
+
     // Find all .ai files
-    const aiFilePaths = await findAiFiles(searchPath);
+    const findResult = await parserService.findAiFiles(searchPath);
+    if (isErr(findResult)) {
+      console.error(chalk.red('Error finding .ai files:'), findResult.error.message);
+      process.exit(1);
+    }
+    const aiFilePaths = findResult.value;
 
     if (aiFilePaths.length === 0) {
       console.log(chalk.yellow('No .ai files found'));
@@ -45,10 +60,25 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
     console.log(chalk.white(`Found ${aiFilePaths.length} .ai file(s)`));
 
     // Parse all .ai files
-    const aiFiles = await Promise.all(aiFilePaths.map(parseAiFile));
+    const parseResults = await Promise.all(aiFilePaths.map(p => parserService.parseAiFile(p)));
+
+    // Check for errors and collect successful parses
+    const aiFiles = [];
+    for (const result of parseResults) {
+      if (isErr(result)) {
+        console.error(chalk.red(`Error parsing file: ${result.error.message}`));
+        continue;
+      }
+      aiFiles.push(result.value);
+    }
 
     // Load current state
-    let state = await loadState();
+    const stateResult = await stateService.loadState(cwd);
+    if (isErr(stateResult)) {
+      console.error(chalk.red('Error loading state:'), stateResult.error.message);
+      process.exit(1);
+    }
+    let state = stateResult.value;
 
     // Detect changes
     const changes = detectChanges(aiFiles, state, options.force);
@@ -81,10 +111,22 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
         const previousState = getFileState(state, aiFile.path);
 
         // Build prompt
-        const prompt = buildPrompt(aiFile, previousState);
+        const promptResult = buildPrompt(aiFile, previousState);
+        if (isErr(promptResult)) {
+          console.log(chalk.red(`  ✗ Failed to build prompt: ${promptResult.error.message}`));
+          failCount++;
+          continue;
+        }
+        const prompt = promptResult.value;
 
         // Get agent
-        const agent = getAgent(aiFile.frontmatter.agent);
+        const agentResult = getAgent(aiFile.frontmatter.agent);
+        if (isErr(agentResult)) {
+          console.log(chalk.red(`  ✗ Failed to get agent: ${agentResult.error.message}`));
+          failCount++;
+          continue;
+        }
+        const agent = agentResult.value;
 
         console.log(chalk.gray(`  Using agent: ${agent.name}`));
 
@@ -133,8 +175,12 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
 
         // Update artifacts in .ai file frontmatter
         if (allArtifacts.length > 0) {
-          await updateArtifacts(aiFile.path, allArtifacts);
-          console.log(chalk.green(`  ✓ Tracked ${allArtifacts.length} artifact(s)`));
+          const updateResult = await parserService.updateArtifacts(aiFile.path, allArtifacts);
+          if (isErr(updateResult)) {
+            console.log(chalk.yellow(`  ⚠ Could not update artifacts: ${updateResult.error.message}`));
+          } else {
+            console.log(chalk.green(`  ✓ Tracked ${allArtifacts.length} artifact(s)`));
+          }
         } else {
           console.log(chalk.yellow(`  ⚠ No artifacts detected`));
         }
@@ -160,7 +206,11 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
     }
 
     // Save updated state
-    await saveState(state);
+    const saveResult = await stateService.saveState(state, cwd);
+    if (isErr(saveResult)) {
+      console.error(chalk.red('Error saving state:'), saveResult.error.message);
+      // Don't exit - generation succeeded, just state save failed
+    }
 
     // Summary
     console.log(chalk.white.bold('Summary:'));
