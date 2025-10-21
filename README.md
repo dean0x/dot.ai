@@ -262,7 +262,7 @@ Artifacts are **editable**! When you run `dot gen` after editing both the spec a
 
 ```json
 {
-  "version": "1.0.0",
+  "version": "0.1.0",
   "files": {
     "/path/to/Button.ai": {
       "lastHash": "a1b2c3...",

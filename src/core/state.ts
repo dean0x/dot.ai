@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DotAiState, AiFileState, DotAiConfig } from '../types';
 
-const STATE_VERSION = '1.0.0';
+const STATE_VERSION = '0.1.0';
 const DEFAULT_CONFIG: DotAiConfig = {
   defaultAgent: 'claude-code',
   stateFile: 'state.json',

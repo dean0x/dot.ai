@@ -10,7 +10,7 @@ import { DotAiState, AiFileState, DotAiConfig } from '../types';
 import { Result, Ok, Err, tryCatch } from '../utils/result';
 import { ParseError, ValidationError } from '../types/errors';
 
-export const STATE_VERSION = '1.0.0';
+export const STATE_VERSION = '0.1.0';
 
 export const DEFAULT_CONFIG: DotAiConfig = {
   defaultAgent: 'claude-code',

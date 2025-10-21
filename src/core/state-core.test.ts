@@ -57,7 +57,7 @@ describe('State Core (Pure Functions)', () => {
   describe('validateState', () => {
     it('validates correct state', () => {
       const data = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {
           '/test/file.ai': {
             lastHash: 'hash123',
@@ -77,7 +77,7 @@ describe('State Core (Pure Functions)', () => {
 
     it('validates empty state', () => {
       const data = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {},
       };
 
@@ -111,20 +111,20 @@ describe('State Core (Pure Functions)', () => {
     });
 
     it('rejects missing files', () => {
-      const data = { version: '1.0.0' };
+      const data = { version: '0.1.0' };
       const result = validateState(data);
       expect(isErr(result)).toBe(true);
     });
 
     it('rejects non-object files', () => {
-      const data = { version: '1.0.0', files: 'not an object' };
+      const data = { version: '0.1.0', files: 'not an object' };
       const result = validateState(data);
       expect(isErr(result)).toBe(true);
     });
 
     it('rejects invalid file state', () => {
       const data = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {
           '/test/file.ai': {
             lastHash: 123, // Should be string
@@ -391,7 +391,7 @@ describe('State Core (Pure Functions)', () => {
   describe('getFileState', () => {
     it('returns file state if exists', () => {
       const state = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {
           '/test/file.ai': {
             lastHash: 'hash123',
@@ -409,7 +409,7 @@ describe('State Core (Pure Functions)', () => {
 
     it('returns undefined if file not in state', () => {
       const state = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {},
       };
 
@@ -421,7 +421,7 @@ describe('State Core (Pure Functions)', () => {
   describe('updateFileState', () => {
     it('adds new file state', () => {
       const state = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {},
       };
 
@@ -435,12 +435,12 @@ describe('State Core (Pure Functions)', () => {
       const updated = updateFileState(state, '/test/file.ai', newFileState);
 
       expect(updated.files['/test/file.ai']).toEqual(newFileState);
-      expect(updated.version).toBe('1.0.0');
+      expect(updated.version).toBe('0.1.0');
     });
 
     it('updates existing file state', () => {
       const state = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {
           '/test/file.ai': {
             lastHash: 'oldHash',
@@ -465,7 +465,7 @@ describe('State Core (Pure Functions)', () => {
 
     it('preserves other file states', () => {
       const state = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {
           '/test/file1.ai': {
             lastHash: 'hash1',
@@ -491,7 +491,7 @@ describe('State Core (Pure Functions)', () => {
 
     it('returns new state object (immutable)', () => {
       const state = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {},
       };
 
@@ -513,7 +513,7 @@ describe('State Core (Pure Functions)', () => {
   describe('removeFileState', () => {
     it('removes existing file state', () => {
       const state = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {
           '/test/file.ai': {
             lastHash: 'hash',
@@ -532,7 +532,7 @@ describe('State Core (Pure Functions)', () => {
 
     it('preserves other file states', () => {
       const state = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {
           '/test/file1.ai': {
             lastHash: 'hash1',
@@ -557,7 +557,7 @@ describe('State Core (Pure Functions)', () => {
 
     it('handles non-existent file gracefully', () => {
       const state = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {},
       };
 
@@ -568,7 +568,7 @@ describe('State Core (Pure Functions)', () => {
 
     it('returns new state object (immutable)', () => {
       const state = {
-        version: '1.0.0',
+        version: '0.1.0',
         files: {
           '/test/file.ai': {
             lastHash: 'hash',
@@ -589,12 +589,12 @@ describe('State Core (Pure Functions)', () => {
 
   describe('isVersionCompatible', () => {
     it('returns true for matching versions', () => {
-      expect(isVersionCompatible('1.0.0', '1.0.0')).toBe(true);
+      expect(isVersionCompatible('0.1.0', '0.1.0')).toBe(true);
     });
 
     it('returns false for different versions', () => {
-      expect(isVersionCompatible('1.0.0', '2.0.0')).toBe(false);
-      expect(isVersionCompatible('2.0.0', '1.0.0')).toBe(false);
+      expect(isVersionCompatible('0.1.0', '0.2.0')).toBe(false);
+      expect(isVersionCompatible('0.2.0', '0.1.0')).toBe(false);
     });
 
     it('uses STATE_VERSION as default', () => {
