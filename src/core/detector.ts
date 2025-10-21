@@ -6,7 +6,7 @@
  */
 
 import { AiFile, DotAiState, ChangeDetectionResult } from '../types';
-import { getFileState } from './state';
+import { getFileState } from './state-core';
 
 /**
  * Detect which .ai files have changed since last generation
