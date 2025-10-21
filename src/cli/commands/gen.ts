@@ -91,7 +91,13 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
         const prompt = promptResult.value;
 
         // Get agent
-        const agent = getAgent(aiFile.frontmatter.agent);
+        const agentResult = getAgent(aiFile.frontmatter.agent);
+        if (isErr(agentResult)) {
+          console.log(chalk.red(`  ✗ Failed to get agent: ${agentResult.error.message}`));
+          failCount++;
+          continue;
+        }
+        const agent = agentResult.value;
 
         console.log(chalk.gray(`  Using agent: ${agent.name}`));
 
