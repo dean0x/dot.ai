@@ -20,6 +20,12 @@ import {
 } from './parser-core';
 
 /**
+ * Maximum directory depth to prevent stack overflow
+ * Protects against deep directory structures and symlink loops
+ */
+const MAX_DEPTH = 50;
+
+/**
  * Parser service for .ai files
  */
 export class ParserService {
@@ -128,7 +134,7 @@ export class ParserService {
   async findAiFiles(directory: string): Promise<Result<string[], FileSystemError>> {
     const results: string[] = [];
 
-    const walkResult = await this.walk(path.resolve(directory), results);
+    const walkResult = await this.walk(path.resolve(directory), results, 0);
     if (isErr(walkResult)) {
       return walkResult;
     }
@@ -139,11 +145,20 @@ export class ParserService {
   /**
    * Recursive directory walker
    * Private helper for findAiFiles
+   *
+   * @param dir - Directory to walk
+   * @param results - Array to collect .ai file paths
+   * @param depth - Current recursion depth (prevents stack overflow)
    */
   private async walk(
     dir: string,
-    results: string[]
+    results: string[],
+    depth: number
   ): Promise<Result<void, FileSystemError>> {
+    // Prevent stack overflow from deep directories or symlink loops
+    if (depth >= MAX_DEPTH) {
+      return new Ok(undefined); // Silently skip deep directories
+    }
     const entriesResult = await this.fs.readdir(dir);
     if (isErr(entriesResult)) {
       return entriesResult;
@@ -158,7 +173,7 @@ export class ParserService {
         if (shouldSkipDirectory(entry.name)) {
           continue;
         }
-        const walkResult = await this.walk(fullPath, results);
+        const walkResult = await this.walk(fullPath, results, depth + 1);
         if (isErr(walkResult)) {
           return walkResult;
         }
