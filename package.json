@@ -10,8 +10,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "prepare": "npm run build",
-    "lint": "eslint src --ext .ts",
-    "test": "jest"
+    "lint": "eslint src --ext .ts"
   },
   "keywords": [
     "ai",
@@ -22,10 +21,17 @@
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dean0x/dot.ai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dean0x/dot.ai/issues"
+  },
+  "homepage": "https://github.com/dean0x/dot.ai#readme",
   "dependencies": {
     "commander": "^12.0.0",
     "gray-matter": "^4.0.3",
-    "glob": "^10.3.10",
     "diff": "^5.2.0",
     "chalk": "^4.1.2"
   },

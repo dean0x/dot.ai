@@ -8,7 +8,7 @@ export async function cleanCommand(): Promise<void> {
     await clearState();
 
     console.log(chalk.green('✓ State cleared'));
-    console.log(chalk.white('Next run of "ai gen" will regenerate all .ai files'));
+    console.log(chalk.white('Next run of "dot gen" will regenerate all .ai files'));
   } catch (error) {
     console.error(chalk.red('Error clearing state:'), error);
     process.exit(1);

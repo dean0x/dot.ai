@@ -284,7 +284,7 @@ interface DotAiState {
 }
 
 interface AiFileState {
-  lastHash: string;        // SHA-256 hash of full .ai file content
+  lastHash: string;        // SHA-256 hash of content portion only (excluding frontmatter)
   lastContent: string;     // Full content from last generation (for diffing)
   lastGenerated: string;   // ISO 8601 timestamp
   artifacts: string[];     // List of generated artifacts
@@ -371,10 +371,15 @@ interface DotAiConfig {
 ### Hash-Based Detection
 
 **Algorithm:**
-1. Calculate SHA-256 hash of entire `.ai` file content (frontmatter + body)
+1. Calculate SHA-256 hash of only the content portion (body only, excluding frontmatter)
 2. Compare with stored hash in state
 3. If hashes differ → file changed
 4. If no stored hash → new file
+
+**Why exclude frontmatter from hash?**
+- Frontmatter contains `artifacts:` which is auto-updated after generation
+- Hashing frontmatter would cause infinite regeneration loops
+- Only content changes should trigger regeneration
 
 **Why hash instead of timestamp?**
 - More reliable (timestamps can be unreliable across filesystems)
@@ -728,7 +733,7 @@ Unchanged (2):
   • src/Footer.ai
   • src/Nav.ai
 
-Run "ai gen" to process 3 file(s)
+Run "dot gen" to process 3 file(s)
 ```
 
 #### `dot ls [path]`
@@ -777,7 +782,7 @@ Total: 2 .ai file(s)
 ```
 Clearing generation state...
 ✓ State cleared
-Next run of "ai gen" will regenerate all .ai files
+Next run of "dot gen" will regenerate all .ai files
 ```
 
 ### Exit Codes
@@ -790,7 +795,7 @@ Next run of "ai gen" will regenerate all .ai files
 **File not found:**
 ```
 Error: No .ai files found
-Create a .ai file first, or run "ai init" to get started
+Create a .ai file first, or run "dot init" to get started
 ```
 
 **Invalid frontmatter:**

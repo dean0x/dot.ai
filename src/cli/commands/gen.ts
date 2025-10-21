@@ -38,7 +38,7 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
 
     if (aiFilePaths.length === 0) {
       console.log(chalk.yellow('No .ai files found'));
-      console.log(chalk.white('Create a .ai file first, or run "ai init" to get started'));
+      console.log(chalk.white('Create a .ai file first, or run "dot init" to get started'));
       return;
     }
 
