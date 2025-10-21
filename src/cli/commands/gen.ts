@@ -6,6 +6,7 @@ import { detectChanges, hasChanges, getFilesToProcess } from '../../core/detecto
 import { buildPrompt } from '../../core/prompt';
 import { getAgent } from '../../agents/interface';
 import { AiFile, AiFileState, DotAiState } from '../../types';
+import { isErr } from '../../utils/result';
 
 interface GenOptions {
   force?: boolean;
@@ -81,7 +82,13 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
         const previousState = getFileState(state, aiFile.path);
 
         // Build prompt
-        const prompt = buildPrompt(aiFile, previousState);
+        const promptResult = buildPrompt(aiFile, previousState);
+        if (isErr(promptResult)) {
+          console.log(chalk.red(`  ✗ Failed to build prompt: ${promptResult.error.message}`));
+          failCount++;
+          continue;
+        }
+        const prompt = promptResult.value;
 
         // Get agent
         const agent = getAgent(aiFile.frontmatter.agent);
