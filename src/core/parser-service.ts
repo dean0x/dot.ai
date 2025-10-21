@@ -108,9 +108,11 @@ export class ParserService {
     const frontmatter = frontmatterResult.value;
 
     // Update artifacts (pure)
+    // Filter out undefined values for YAML serialization
     const updatedFrontmatter: AiFileFrontmatter = {
-      ...frontmatter,
+      agent: frontmatter.agent,
       artifacts,
+      ...(frontmatter.agent_config !== undefined && { agent_config: frontmatter.agent_config }),
     };
 
     // Serialize (pure)
