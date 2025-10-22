@@ -37,6 +37,54 @@ async function promptUser(question: string): Promise<boolean> {
 }
 
 /**
+ * Recursively scan directory for all files (excluding special directories)
+ */
+async function scanAllFiles(dir: string, baseDir: string = dir): Promise<string[]> {
+  const fs = await import('fs/promises');
+  const allFiles: string[] = [];
+
+  async function walk(currentDir: string, depth: number = 0): Promise<void> {
+    // Prevent infinite recursion
+    if (depth > 50) return;
+
+    try {
+      const entries = await fs.readdir(currentDir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const fullPath = path.join(currentDir, entry.name);
+
+        if (entry.isDirectory()) {
+          // Skip special directories
+          const skipDirs = ['.dotai', 'node_modules', '.git', '.hg', '.svn'];
+          if (skipDirs.includes(entry.name)) {
+            continue;
+          }
+          // Recursively walk subdirectories
+          await walk(fullPath, depth + 1);
+        } else if (entry.isFile()) {
+          // Exclude .ai files and .gitignore
+          if (entry.name.endsWith('.ai') || entry.name === '.gitignore') {
+            continue;
+          }
+          // Store relative path from baseDir
+          const relativePath = path.relative(baseDir, fullPath);
+          allFiles.push(relativePath);
+        }
+      }
+    } catch (error) {
+      // Ignore permission errors and continue
+      if ((error as NodeJS.ErrnoException).code !== 'EACCES' &&
+          (error as NodeJS.ErrnoException).code !== 'EPERM') {
+        throw error;
+      }
+    }
+  }
+
+  await walk(dir);
+  return allFiles;
+}
+
+/**
  * Process a single .ai file, potentially recursively
  */
 async function processFileRecursively(
@@ -95,21 +143,17 @@ async function processFileRecursively(
 
   // Fallback: Scan file system for new files if no artifacts detected
   if (allArtifacts.length === 0) {
-    console.log(chalk.gray(`  No artifacts detected from output, scanning file system...`));
-    const fs = await import('fs/promises');
+    console.log(chalk.gray(`  No artifacts detected from output, scanning file system recursively...`));
     const filesBefore = previousState?.artifacts || [];
 
-    // Get all files in current directory (excluding .dotai and .ai files)
-    const entries = await fs.readdir(cwd, { withFileTypes: true });
-    const filesNow = entries
-      .filter(e => e.isFile() && !e.name.endsWith('.ai') && e.name !== '.gitignore')
-      .map(e => e.name);
+    // Recursively scan all files in project (excluding special directories)
+    const filesNow = await scanAllFiles(cwd);
 
     // Find new files that weren't there before
     const newFiles = filesNow.filter(f => !filesBefore.includes(f));
     if (newFiles.length > 0) {
       allArtifacts = [...new Set([...filesBefore, ...newFiles])];
-      console.log(chalk.gray(`  Found ${newFiles.length} new file(s) via filesystem scan`));
+      console.log(chalk.gray(`  Found ${newFiles.length} new file(s) via recursive filesystem scan`));
     }
   }
 
