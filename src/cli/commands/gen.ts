@@ -161,7 +161,7 @@ async function processFileRecursively(
   const maxDepth = aiFile.frontmatter.max_recursion_depth ?? MAX_RECURSION_DEPTH;
   const isInfinite = maxDepth === "∞";
 
-  if (!isInfinite && recursionDepth >= (maxDepth as number)) {
+  if (!isInfinite && typeof maxDepth === 'number' && recursionDepth >= maxDepth) {
     console.log(chalk.yellow(`  ⚠ Maximum recursion depth (${maxDepth}) reached`));
     console.log(chalk.yellow(`  ⚠ Agent updated spec but cannot continue`));
     return { success: true, updatedState, specChanged: true };
