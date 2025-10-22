@@ -27,7 +27,7 @@ async function processFileRecursively(
   parserService: ParserService,
   cwd: string,
   recursionDepth: number = 0
-): Promise<{ success: boolean; updatedState: DotAiState; artifactsChanged: boolean }> {
+): Promise<{ success: boolean; updatedState: DotAiState; specChanged: boolean }> {
   // Get previous state
   const previousState = getFileState(state, aiFile.path);
   const previousArtifacts = previousState?.artifacts || [];
@@ -36,7 +36,7 @@ async function processFileRecursively(
   const promptResult = buildPrompt(aiFile, previousState);
   if (isErr(promptResult)) {
     console.log(chalk.red(`  ✗ Failed to build prompt: ${promptResult.error.message}`));
-    return { success: false, updatedState: state, artifactsChanged: false };
+    return { success: false, updatedState: state, specChanged: false };
   }
   const prompt = promptResult.value;
 
@@ -44,7 +44,7 @@ async function processFileRecursively(
   const agentResult = getAgent(aiFile.frontmatter.agent);
   if (isErr(agentResult)) {
     console.log(chalk.red(`  ✗ Failed to get agent: ${agentResult.error.message}`));
-    return { success: false, updatedState: state, artifactsChanged: false };
+    return { success: false, updatedState: state, specChanged: false };
   }
   const agent = agentResult.value;
 
@@ -67,7 +67,7 @@ async function processFileRecursively(
 
   if (!result.success) {
     console.log(chalk.red(`  ✗ Failed: ${result.error}`));
-    return { success: false, updatedState: state, artifactsChanged: false };
+    return { success: false, updatedState: state, specChanged: false };
   }
 
   // Combine detected artifacts with existing frontmatter artifacts
@@ -107,9 +107,6 @@ async function processFileRecursively(
     console.log(chalk.yellow(`  ⚠ No artifacts detected`));
   }
 
-  // Check if artifacts changed
-  const artifactsChanged = JSON.stringify([...allArtifacts].sort()) !== JSON.stringify([...previousArtifacts].sort());
-
   // Update state
   const newState: AiFileState = {
     lastHash: aiFile.hash,
@@ -120,39 +117,51 @@ async function processFileRecursively(
 
   let updatedState = updateFileState(state, aiFile.path, newState);
 
-  // Check if we should recurse
-  const maxDepth = aiFile.frontmatter.max_recursion_depth ?? MAX_RECURSION_DEPTH;
-  const isInfinite = maxDepth === "∞";
-  const shouldRecurse = aiFile.frontmatter.recursive && artifactsChanged && (isInfinite || recursionDepth < maxDepth);
-
-  if (shouldRecurse) {
-    console.log(chalk.cyan(`  ↻ Recursive mode enabled, changes detected. Running again...`));
-    console.log();
-
-    // Re-parse the file to get updated content/hash
-    const reparseResult = await parserService.parseAiFile(aiFile.path);
-    if (isErr(reparseResult)) {
-      console.log(chalk.yellow(`  ⚠ Could not re-parse file for recursion: ${reparseResult.error.message}`));
-      return { success: true, updatedState, artifactsChanged };
-    }
-
-    // Recursively process again
-    const recursiveResult = await processFileRecursively(
-      reparseResult.value,
-      updatedState,
-      parserService,
-      cwd,
-      recursionDepth + 1
-    );
-
-    return recursiveResult;
-  } else if (aiFile.frontmatter.recursive && !isInfinite && recursionDepth >= (maxDepth as number)) {
-    console.log(chalk.yellow(`  ⚠ Maximum recursion depth (${maxDepth}) reached`));
-  } else if (aiFile.frontmatter.recursive && !artifactsChanged) {
-    console.log(chalk.gray(`  ✓ No changes detected, recursion complete`));
+  // Check if we should recurse (only if recursive mode is enabled)
+  if (!aiFile.frontmatter.recursive) {
+    return { success: true, updatedState, specChanged: false };
   }
 
-  return { success: true, updatedState, artifactsChanged };
+  // Re-parse the .ai file to check if the agent modified the spec
+  const reparseResult = await parserService.parseAiFile(aiFile.path);
+  if (isErr(reparseResult)) {
+    console.log(chalk.yellow(`  ⚠ Could not re-parse file to check for spec changes: ${reparseResult.error.message}`));
+    return { success: true, updatedState, specChanged: false };
+  }
+
+  const updatedAiFile = reparseResult.value;
+
+  // Check if the spec content changed (agent updated the .ai file to describe next task)
+  const specChanged = updatedAiFile.content !== aiFile.content;
+
+  if (!specChanged) {
+    console.log(chalk.gray(`  ✓ Spec unchanged, agent indicates work is complete`));
+    return { success: true, updatedState, specChanged: false };
+  }
+
+  // Spec changed - check if we can continue recursing
+  const maxDepth = aiFile.frontmatter.max_recursion_depth ?? MAX_RECURSION_DEPTH;
+  const isInfinite = maxDepth === "∞";
+
+  if (!isInfinite && recursionDepth >= (maxDepth as number)) {
+    console.log(chalk.yellow(`  ⚠ Maximum recursion depth (${maxDepth}) reached`));
+    console.log(chalk.yellow(`  ⚠ Agent updated spec but cannot continue`));
+    return { success: true, updatedState, specChanged: true };
+  }
+
+  // Continue recursing with updated spec
+  console.log(chalk.cyan(`  ↻ Agent updated spec with next task, recursing...`));
+  console.log();
+
+  const recursiveResult = await processFileRecursively(
+    updatedAiFile,
+    updatedState,
+    parserService,
+    cwd,
+    recursionDepth + 1
+  );
+
+  return recursiveResult;
 }
 
 export async function genCommand(targetPath?: string, options: GenOptions = {}): Promise<void> {
