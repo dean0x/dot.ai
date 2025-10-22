@@ -149,11 +149,42 @@ export function validateFrontmatter(
     );
   }
 
+  // Validate max_recursion_depth field (optional)
+  let maxRecursionDepth: number | "∞" | undefined;
+  if (fm.max_recursion_depth !== undefined) {
+    const value = fm.max_recursion_depth;
+
+    // Accept "∞", "Infinity", or a positive number
+    if (value === "∞" || value === "Infinity") {
+      maxRecursionDepth = "∞";
+    } else if (typeof value === 'number') {
+      if (value <= 0 || !Number.isInteger(value)) {
+        return new Err(
+          new ValidationError(
+            'Field "max_recursion_depth" must be a positive integer or "∞"',
+            'INVALID_CONFIG',
+            { max_recursion_depth: value }
+          )
+        );
+      }
+      maxRecursionDepth = value;
+    } else {
+      return new Err(
+        new ValidationError(
+          'Field "max_recursion_depth" must be a positive integer or "∞"',
+          'INVALID_CONFIG',
+          { max_recursion_depth: value }
+        )
+      );
+    }
+  }
+
   return new Ok({
     agent: fm.agent,
     artifacts: artifacts as string[],
     agent_config: agentConfig as Record<string, unknown> | undefined,
     recursive: recursive as boolean | undefined,
+    max_recursion_depth: maxRecursionDepth,
   });
 }
 

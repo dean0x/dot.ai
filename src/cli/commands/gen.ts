@@ -121,7 +121,11 @@ async function processFileRecursively(
   let updatedState = updateFileState(state, aiFile.path, newState);
 
   // Check if we should recurse
-  if (aiFile.frontmatter.recursive && artifactsChanged && recursionDepth < MAX_RECURSION_DEPTH) {
+  const maxDepth = aiFile.frontmatter.max_recursion_depth ?? MAX_RECURSION_DEPTH;
+  const isInfinite = maxDepth === "∞";
+  const shouldRecurse = aiFile.frontmatter.recursive && artifactsChanged && (isInfinite || recursionDepth < maxDepth);
+
+  if (shouldRecurse) {
     console.log(chalk.cyan(`  ↻ Recursive mode enabled, changes detected. Running again...`));
     console.log();
 
@@ -142,8 +146,8 @@ async function processFileRecursively(
     );
 
     return recursiveResult;
-  } else if (aiFile.frontmatter.recursive && recursionDepth >= MAX_RECURSION_DEPTH) {
-    console.log(chalk.yellow(`  ⚠ Maximum recursion depth (${MAX_RECURSION_DEPTH}) reached`));
+  } else if (aiFile.frontmatter.recursive && !isInfinite && recursionDepth >= (maxDepth as number)) {
+    console.log(chalk.yellow(`  ⚠ Maximum recursion depth (${maxDepth}) reached`));
   } else if (aiFile.frontmatter.recursive && !artifactsChanged) {
     console.log(chalk.gray(`  ✓ No changes detected, recursion complete`));
   }

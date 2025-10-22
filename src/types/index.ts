@@ -17,6 +17,9 @@ export interface AiFileFrontmatter {
 
   /** Whether to run recursively after changes are detected */
   recursive?: boolean;
+
+  /** Maximum recursion depth (default: 10, use "∞" for infinite) */
+  max_recursion_depth?: number | "∞";
 }
 
 /**
