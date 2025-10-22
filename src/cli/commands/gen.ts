@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import * as path from 'path';
+import * as readline from 'readline';
 import { ParserService } from '../../core/parser-service';
 import { StateService } from '../../core/state-service';
 import { NodeFileSystem } from '../../infrastructure/fs-adapter';
@@ -17,6 +18,23 @@ interface GenOptions {
 
 // Maximum recursion depth to prevent infinite loops
 const MAX_RECURSION_DEPTH = 10;
+
+/**
+ * Prompt user for confirmation
+ */
+async function promptUser(question: string): Promise<boolean> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+    });
+  });
+}
 
 /**
  * Process a single .ai file, potentially recursively
@@ -240,6 +258,36 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
 
     // Get files to process
     const filesToProcess = getFilesToProcess(changes);
+
+    // Check if any files have infinite recursion enabled
+    const infiniteRecursionFiles = filesToProcess.filter(
+      file => file.frontmatter.recursive && file.frontmatter.max_recursion_depth === "∞"
+    );
+
+    if (infiniteRecursionFiles.length > 0) {
+      console.log();
+      console.log(chalk.yellow('⚠ WARNING: Infinite recursion mode detected'));
+      console.log(chalk.white(`  ${infiniteRecursionFiles.length} file(s) have recursive: true with max_recursion_depth: ∞`));
+      console.log(chalk.gray('  Files:'));
+      infiniteRecursionFiles.forEach(file => {
+        console.log(chalk.gray(`    - ${path.basename(file.path)}`));
+      });
+      console.log();
+      console.log(chalk.white('  These files will continue processing until the agent stops updating the spec.'));
+      console.log(chalk.white('  This could potentially run for a very long time.'));
+      console.log(chalk.gray('  (You can interrupt anytime with Ctrl+C)'));
+      console.log();
+
+      const confirmed = await promptUser(chalk.white('Continue? (y/n): '));
+
+      if (!confirmed) {
+        console.log(chalk.yellow('Operation cancelled by user'));
+        process.off('SIGINT', handleInterrupt);
+        process.off('SIGTERM', handleInterrupt);
+        return;
+      }
+      console.log();
+    }
 
     console.log(chalk.white(`Processing ${filesToProcess.length} file(s)...`));
     console.log();
