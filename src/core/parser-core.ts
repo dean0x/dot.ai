@@ -137,10 +137,23 @@ export function validateFrontmatter(
     );
   }
 
+  // Validate recursive field (optional)
+  const recursive = fm.recursive;
+  if (recursive !== undefined && typeof recursive !== 'boolean') {
+    return new Err(
+      new ValidationError(
+        'Field "recursive" must be a boolean',
+        'INVALID_CONFIG',
+        { recursive }
+      )
+    );
+  }
+
   return new Ok({
     agent: fm.agent,
     artifacts: artifacts as string[],
     agent_config: agentConfig as Record<string, unknown> | undefined,
+    recursive: recursive as boolean | undefined,
   });
 }
 

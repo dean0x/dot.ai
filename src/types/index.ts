@@ -14,6 +14,9 @@ export interface AiFileFrontmatter {
 
   /** List of generated artifact files */
   artifacts: string[];
+
+  /** Whether to run recursively after changes are detected */
+  recursive?: boolean;
 }
 
 /**

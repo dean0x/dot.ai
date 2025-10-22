@@ -15,6 +15,142 @@ interface GenOptions {
   force?: boolean;
 }
 
+// Maximum recursion depth to prevent infinite loops
+const MAX_RECURSION_DEPTH = 10;
+
+/**
+ * Process a single .ai file, potentially recursively
+ */
+async function processFileRecursively(
+  aiFile: AiFile,
+  state: DotAiState,
+  parserService: ParserService,
+  cwd: string,
+  recursionDepth: number = 0
+): Promise<{ success: boolean; updatedState: DotAiState; artifactsChanged: boolean }> {
+  // Get previous state
+  const previousState = getFileState(state, aiFile.path);
+  const previousArtifacts = previousState?.artifacts || [];
+
+  // Build prompt
+  const promptResult = buildPrompt(aiFile, previousState);
+  if (isErr(promptResult)) {
+    console.log(chalk.red(`  ✗ Failed to build prompt: ${promptResult.error.message}`));
+    return { success: false, updatedState: state, artifactsChanged: false };
+  }
+  const prompt = promptResult.value;
+
+  // Get agent
+  const agentResult = getAgent(aiFile.frontmatter.agent);
+  if (isErr(agentResult)) {
+    console.log(chalk.red(`  ✗ Failed to get agent: ${agentResult.error.message}`));
+    return { success: false, updatedState: state, artifactsChanged: false };
+  }
+  const agent = agentResult.value;
+
+  if (recursionDepth > 0) {
+    console.log(chalk.cyan(`  ↻ Recursive iteration ${recursionDepth}`));
+  }
+  console.log(chalk.gray(`  Using agent: ${agent.name}`));
+
+  // Invoke agent
+  const result = await agent.invoke(prompt, {
+    cwd,
+    agentConfig: aiFile.frontmatter.agent_config,
+    existingArtifacts: previousState?.artifacts,
+  });
+
+  // Clear separator after agent output
+  console.log();
+  console.log(chalk.gray(`  ─────────────────────────────────`));
+  console.log(chalk.gray(`  Agent completed`));
+
+  if (!result.success) {
+    console.log(chalk.red(`  ✗ Failed: ${result.error}`));
+    return { success: false, updatedState: state, artifactsChanged: false };
+  }
+
+  // Combine detected artifacts with existing frontmatter artifacts
+  let allArtifacts = [
+    ...new Set([...aiFile.frontmatter.artifacts, ...result.artifacts]),
+  ];
+
+  // Fallback: Scan file system for new files if no artifacts detected
+  if (allArtifacts.length === 0) {
+    console.log(chalk.gray(`  No artifacts detected from output, scanning file system...`));
+    const fs = await import('fs/promises');
+    const filesBefore = previousState?.artifacts || [];
+
+    // Get all files in current directory (excluding .dotai and .ai files)
+    const entries = await fs.readdir(cwd, { withFileTypes: true });
+    const filesNow = entries
+      .filter(e => e.isFile() && !e.name.endsWith('.ai') && e.name !== '.gitignore')
+      .map(e => e.name);
+
+    // Find new files that weren't there before
+    const newFiles = filesNow.filter(f => !filesBefore.includes(f));
+    if (newFiles.length > 0) {
+      allArtifacts = [...new Set([...filesBefore, ...newFiles])];
+      console.log(chalk.gray(`  Found ${newFiles.length} new file(s) via filesystem scan`));
+    }
+  }
+
+  // Update artifacts in .ai file frontmatter
+  if (allArtifacts.length > 0) {
+    const updateResult = await parserService.updateArtifacts(aiFile.path, allArtifacts);
+    if (isErr(updateResult)) {
+      console.log(chalk.yellow(`  ⚠ Could not update artifacts: ${updateResult.error.message}`));
+    } else {
+      console.log(chalk.green(`  ✓ Tracked ${allArtifacts.length} artifact(s)`));
+    }
+  } else {
+    console.log(chalk.yellow(`  ⚠ No artifacts detected`));
+  }
+
+  // Check if artifacts changed
+  const artifactsChanged = JSON.stringify([...allArtifacts].sort()) !== JSON.stringify([...previousArtifacts].sort());
+
+  // Update state
+  const newState: AiFileState = {
+    lastHash: aiFile.hash,
+    lastContent: aiFile.content,
+    lastGenerated: new Date().toISOString(),
+    artifacts: allArtifacts,
+  };
+
+  let updatedState = updateFileState(state, aiFile.path, newState);
+
+  // Check if we should recurse
+  if (aiFile.frontmatter.recursive && artifactsChanged && recursionDepth < MAX_RECURSION_DEPTH) {
+    console.log(chalk.cyan(`  ↻ Recursive mode enabled, changes detected. Running again...`));
+    console.log();
+
+    // Re-parse the file to get updated content/hash
+    const reparseResult = await parserService.parseAiFile(aiFile.path);
+    if (isErr(reparseResult)) {
+      console.log(chalk.yellow(`  ⚠ Could not re-parse file for recursion: ${reparseResult.error.message}`));
+      return { success: true, updatedState, artifactsChanged };
+    }
+
+    // Recursively process again
+    const recursiveResult = await processFileRecursively(
+      reparseResult.value,
+      updatedState,
+      parserService,
+      cwd,
+      recursionDepth + 1
+    );
+
+    return recursiveResult;
+  } else if (aiFile.frontmatter.recursive && recursionDepth >= MAX_RECURSION_DEPTH) {
+    console.log(chalk.yellow(`  ⚠ Maximum recursion depth (${MAX_RECURSION_DEPTH}) reached`));
+  } else if (aiFile.frontmatter.recursive && !artifactsChanged) {
+    console.log(chalk.gray(`  ✓ No changes detected, recursion complete`));
+  }
+
+  return { success: true, updatedState, artifactsChanged };
+}
+
 export async function genCommand(targetPath?: string, options: GenOptions = {}): Promise<void> {
   // Handle Ctrl+C gracefully
   let interrupted = false;
@@ -107,96 +243,23 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
       console.log(chalk.blue(`[${fileNum}/${filesToProcess.length}] Processing ${fileName}...`));
 
       try {
-        // Get previous state
-        const previousState = getFileState(state, aiFile.path);
+        // Process file (potentially recursively)
+        const processResult = await processFileRecursively(
+          aiFile,
+          state,
+          parserService,
+          cwd
+        );
 
-        // Build prompt
-        const promptResult = buildPrompt(aiFile, previousState);
-        if (isErr(promptResult)) {
-          console.log(chalk.red(`  ✗ Failed to build prompt: ${promptResult.error.message}`));
-          failCount++;
-          continue;
-        }
-        const prompt = promptResult.value;
+        // Update state with result
+        state = processResult.updatedState;
 
-        // Get agent
-        const agentResult = getAgent(aiFile.frontmatter.agent);
-        if (isErr(agentResult)) {
-          console.log(chalk.red(`  ✗ Failed to get agent: ${agentResult.error.message}`));
-          failCount++;
-          continue;
-        }
-        const agent = agentResult.value;
-
-        console.log(chalk.gray(`  Using agent: ${agent.name}`));
-
-        // Invoke agent
-        const result = await agent.invoke(prompt, {
-          cwd,
-          agentConfig: aiFile.frontmatter.agent_config,
-          existingArtifacts: previousState?.artifacts,
-        });
-
-        // Clear separator after agent output
-        console.log();
-        console.log(chalk.gray(`  ─────────────────────────────────`));
-        console.log(chalk.gray(`  Agent completed`));
-
-        if (!result.success) {
-          console.log(chalk.red(`  ✗ Failed: ${result.error}`));
-          failCount++;
-          continue;
-        }
-
-        // Combine detected artifacts with existing frontmatter artifacts
-        let allArtifacts = [
-          ...new Set([...aiFile.frontmatter.artifacts, ...result.artifacts]),
-        ];
-
-        // Fallback: Scan file system for new files if no artifacts detected
-        if (allArtifacts.length === 0) {
-          console.log(chalk.gray(`  No artifacts detected from output, scanning file system...`));
-          const fs = await import('fs/promises');
-          const filesBefore = previousState?.artifacts || [];
-
-          // Get all files in current directory (excluding .dotai and .ai files)
-          const entries = await fs.readdir(cwd, { withFileTypes: true });
-          const filesNow = entries
-            .filter(e => e.isFile() && !e.name.endsWith('.ai') && e.name !== '.gitignore')
-            .map(e => e.name);
-
-          // Find new files that weren't there before
-          const newFiles = filesNow.filter(f => !filesBefore.includes(f));
-          if (newFiles.length > 0) {
-            allArtifacts = [...new Set([...filesBefore, ...newFiles])];
-            console.log(chalk.gray(`  Found ${newFiles.length} new file(s) via filesystem scan`));
-          }
-        }
-
-        // Update artifacts in .ai file frontmatter
-        if (allArtifacts.length > 0) {
-          const updateResult = await parserService.updateArtifacts(aiFile.path, allArtifacts);
-          if (isErr(updateResult)) {
-            console.log(chalk.yellow(`  ⚠ Could not update artifacts: ${updateResult.error.message}`));
-          } else {
-            console.log(chalk.green(`  ✓ Tracked ${allArtifacts.length} artifact(s)`));
-          }
+        if (processResult.success) {
+          console.log(chalk.green(`  ✓ Success`));
+          successCount++;
         } else {
-          console.log(chalk.yellow(`  ⚠ No artifacts detected`));
+          failCount++;
         }
-
-        // Update state
-        const newState: AiFileState = {
-          lastHash: aiFile.hash,
-          lastContent: aiFile.content,
-          lastGenerated: new Date().toISOString(),
-          artifacts: allArtifacts,
-        };
-
-        state = updateFileState(state, aiFile.path, newState);
-
-        console.log(chalk.green(`  ✓ Success`));
-        successCount++;
       } catch (error) {
         console.log(chalk.red(`  ✗ Error: ${error instanceof Error ? error.message : String(error)}`));
         failCount++;
