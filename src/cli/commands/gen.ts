@@ -84,6 +84,13 @@ async function scanAllFiles(dir: string, baseDir: string = dir): Promise<string[
   return allFiles;
 }
 
+interface RecursionMetrics {
+  totalIterations: number;
+  totalTimeMs: number;
+  convergenceReason: 'natural' | 'max_depth' | 'error' | 'none';
+  iterationTimes: number[];
+}
+
 /**
  * Process a single .ai file, potentially recursively
  */
@@ -92,8 +99,16 @@ async function processFileRecursively(
   state: DotAiState,
   parserService: ParserService,
   cwd: string,
-  recursionDepth: number = 0
-): Promise<{ success: boolean; updatedState: DotAiState; specChanged: boolean }> {
+  recursionDepth: number = 0,
+  startTime: number = Date.now(),
+  iterationTimes: number[] = []
+): Promise<{
+  success: boolean;
+  updatedState: DotAiState;
+  specChanged: boolean;
+  metrics: RecursionMetrics;
+}> {
+  const iterationStartTime = Date.now();
   // Get previous state
   const previousState = getFileState(state, aiFile.path);
   const previousArtifacts = previousState?.artifacts || [];
@@ -102,7 +117,19 @@ async function processFileRecursively(
   const promptResult = buildPrompt(aiFile, previousState);
   if (isErr(promptResult)) {
     console.log(chalk.red(`  ✗ Failed to build prompt: ${promptResult.error.message}`));
-    return { success: false, updatedState: state, specChanged: false };
+    const iterationTime = Date.now() - iterationStartTime;
+    iterationTimes.push(iterationTime);
+    return {
+      success: false,
+      updatedState: state,
+      specChanged: false,
+      metrics: {
+        totalIterations: recursionDepth + 1,
+        totalTimeMs: Date.now() - startTime,
+        convergenceReason: 'error',
+        iterationTimes,
+      },
+    };
   }
   const prompt = promptResult.value;
 
@@ -110,7 +137,19 @@ async function processFileRecursively(
   const agentResult = getAgent(aiFile.frontmatter.agent);
   if (isErr(agentResult)) {
     console.log(chalk.red(`  ✗ Failed to get agent: ${agentResult.error.message}`));
-    return { success: false, updatedState: state, specChanged: false };
+    const iterationTime = Date.now() - iterationStartTime;
+    iterationTimes.push(iterationTime);
+    return {
+      success: false,
+      updatedState: state,
+      specChanged: false,
+      metrics: {
+        totalIterations: recursionDepth + 1,
+        totalTimeMs: Date.now() - startTime,
+        convergenceReason: 'error',
+        iterationTimes,
+      },
+    };
   }
   const agent = agentResult.value;
 
@@ -133,7 +172,20 @@ async function processFileRecursively(
 
   if (!result.success) {
     console.log(chalk.red(`  ✗ Failed: ${result.error}`));
-    return { success: false, updatedState: state, specChanged: false };
+    const iterationTime = Date.now() - iterationStartTime;
+    iterationTimes.push(iterationTime);
+    console.log(chalk.gray(`  Iteration time: ${(iterationTime / 1000).toFixed(1)}s`));
+    return {
+      success: false,
+      updatedState: state,
+      specChanged: false,
+      metrics: {
+        totalIterations: recursionDepth + 1,
+        totalTimeMs: Date.now() - startTime,
+        convergenceReason: 'error',
+        iterationTimes,
+      },
+    };
   }
 
   // Combine detected artifacts with existing frontmatter artifacts
@@ -179,16 +231,43 @@ async function processFileRecursively(
 
   let updatedState = updateFileState(state, aiFile.path, newState);
 
+  // Log iteration timing
+  const iterationTime = Date.now() - iterationStartTime;
+  iterationTimes.push(iterationTime);
+  if (recursionDepth > 0) {
+    console.log(chalk.gray(`  Iteration ${recursionDepth} time: ${(iterationTime / 1000).toFixed(1)}s`));
+  }
+
   // Check if we should recurse (only if recursive mode is enabled)
   if (!aiFile.frontmatter.recursive) {
-    return { success: true, updatedState, specChanged: false };
+    return {
+      success: true,
+      updatedState,
+      specChanged: false,
+      metrics: {
+        totalIterations: recursionDepth + 1,
+        totalTimeMs: Date.now() - startTime,
+        convergenceReason: 'none',
+        iterationTimes,
+      },
+    };
   }
 
   // Re-parse the .ai file to check if the agent modified the spec
   const reparseResult = await parserService.parseAiFile(aiFile.path);
   if (isErr(reparseResult)) {
     console.log(chalk.yellow(`  ⚠ Could not re-parse file to check for spec changes: ${reparseResult.error.message}`));
-    return { success: true, updatedState, specChanged: false };
+    return {
+      success: true,
+      updatedState,
+      specChanged: false,
+      metrics: {
+        totalIterations: recursionDepth + 1,
+        totalTimeMs: Date.now() - startTime,
+        convergenceReason: 'error',
+        iterationTimes,
+      },
+    };
   }
 
   const updatedAiFile = reparseResult.value;
@@ -198,7 +277,17 @@ async function processFileRecursively(
 
   if (!specChanged) {
     console.log(chalk.gray(`  ✓ Spec unchanged, agent indicates work is complete`));
-    return { success: true, updatedState, specChanged: false };
+    return {
+      success: true,
+      updatedState,
+      specChanged: false,
+      metrics: {
+        totalIterations: recursionDepth + 1,
+        totalTimeMs: Date.now() - startTime,
+        convergenceReason: 'natural',
+        iterationTimes,
+      },
+    };
   }
 
   // Spec changed - check if we can continue recursing
@@ -208,7 +297,17 @@ async function processFileRecursively(
   if (!isInfinite && typeof maxDepth === 'number' && recursionDepth >= maxDepth) {
     console.log(chalk.yellow(`  ⚠ Maximum recursion depth (${maxDepth}) reached`));
     console.log(chalk.yellow(`  ⚠ Agent updated spec but cannot continue`));
-    return { success: true, updatedState, specChanged: true };
+    return {
+      success: true,
+      updatedState,
+      specChanged: true,
+      metrics: {
+        totalIterations: recursionDepth + 1,
+        totalTimeMs: Date.now() - startTime,
+        convergenceReason: 'max_depth',
+        iterationTimes,
+      },
+    };
   }
 
   // Continue recursing with updated spec
@@ -220,7 +319,9 @@ async function processFileRecursively(
     updatedState,
     parserService,
     cwd,
-    recursionDepth + 1
+    recursionDepth + 1,
+    startTime,
+    iterationTimes
   );
 
   return recursiveResult;
@@ -361,6 +462,26 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
 
         if (processResult.success) {
           console.log(chalk.green(`  ✓ Success`));
+
+          // Display metrics summary
+          const metrics = processResult.metrics;
+          if (metrics.totalIterations > 1 || aiFile.frontmatter.recursive) {
+            console.log();
+            console.log(chalk.white.bold(`  Recursion Summary:`));
+            console.log(chalk.white(`    Total iterations: ${metrics.totalIterations}`));
+            console.log(chalk.white(`    Total time: ${(metrics.totalTimeMs / 1000).toFixed(1)}s`));
+            console.log(chalk.white(`    Average time per iteration: ${(metrics.totalTimeMs / metrics.totalIterations / 1000).toFixed(1)}s`));
+
+            // Show convergence reason
+            const convergenceMessages = {
+              natural: chalk.green('    Convergence: Natural (spec stabilized)'),
+              max_depth: chalk.yellow('    Convergence: Max depth reached'),
+              error: chalk.red('    Convergence: Stopped due to error'),
+              none: chalk.gray('    Convergence: Single iteration (non-recursive)'),
+            };
+            console.log(convergenceMessages[metrics.convergenceReason]);
+          }
+
           successCount++;
         } else {
           failCount++;
