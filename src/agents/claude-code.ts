@@ -317,6 +317,28 @@ export class ClaudeCodeAgent implements CodingAgent {
                     // Other tools - just show name
                     process.stdout.write(chalk.bold(toolName) + '\n');
                   }
+                } else if (content.type === 'tool_result') {
+                  // Show tool results if available
+                  const toolResult = content.content;
+                  if (toolResult && typeof toolResult === 'string' && toolResult.trim()) {
+                    // Show truncated tool output (first 200 chars)
+                    const truncated = toolResult.length > 200
+                      ? toolResult.substring(0, 200) + '...'
+                      : toolResult;
+                    process.stdout.write(chalk.gray(truncated) + '\n');
+                  }
+                }
+              }
+            } else if (json.type === 'user' && json.message?.content) {
+              // User messages (if any)
+              for (const content of json.message.content) {
+                if (content.type === 'text' && content.text) {
+                  process.stdout.write(chalk.cyan('User: ') + content.text + '\n');
+                } else if (content.type === 'tool_result') {
+                  // Tool result from user side
+                  if (content.content) {
+                    process.stdout.write(chalk.gray(String(content.content).substring(0, 200)) + '\n');
+                  }
                 }
               }
             } else if (json.type === 'result') {
