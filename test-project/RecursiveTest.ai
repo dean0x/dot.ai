@@ -1,0 +1,20 @@
+---
+agent: claude-code
+artifacts: []
+recursive: true
+max_recursion_depth: 5
+---
+
+# Recursive Test Specification
+
+Create a simple TypeScript utility function that adds two numbers.
+
+## Requirements
+
+- Function should be named `add`
+- Should accept two number parameters
+- Should return the sum
+- Include JSDoc comments
+- Include a simple test file
+
+This file has recursive mode enabled with a max depth of 5, so the agent will continue to refine the code until no more changes are needed or 5 iterations are reached.

@@ -1,0 +1,22 @@
+---
+agent: claude-code
+artifacts: []
+recursive: true
+max_recursion_depth: ∞
+---
+
+# Infinite Recursion Example
+
+Create a simple calculator utility.
+
+## Requirements
+
+- Function should be named `calculator`
+- Support basic operations: add, subtract, multiply, divide
+- Include proper TypeScript types
+- Include JSDoc comments
+- Include comprehensive tests
+
+This file has infinite recursion enabled (∞). The agent will continue to refine the code until it reaches a stable state with no more changes.
+
+**Warning:** Use infinite recursion carefully. Make sure your specification is clear and achievable to avoid endless iterations.
