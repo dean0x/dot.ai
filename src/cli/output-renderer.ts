@@ -18,7 +18,7 @@ export class OutputRenderer {
     this.spinner = ora({
       text: message,
       color: 'cyan',
-      indent: this.currentIndent * 2,
+      indent: 0,
     }).start();
   }
 
@@ -311,16 +311,16 @@ export class OutputRenderer {
     this.newline();
     console.log(chalk.yellow.bold('⚠ WARNING: Infinite recursion mode detected'));
     this.newline();
-    console.log(chalk.white(`  ${files.length} file(s) configured with recursive: true and max_recursion_depth: ∞`));
+    console.log(chalk.white(`${files.length} file(s) configured with recursive: true and max_recursion_depth: ∞`));
     this.newline();
-    console.log(chalk.gray('  Files:'));
+    console.log(chalk.gray('Files:'));
     files.forEach(file => {
-      console.log(chalk.gray(`    • ${file.name}`));
+      console.log(chalk.gray(`• ${file.name}`));
     });
     this.newline();
-    console.log(chalk.white('  These files will continue until the agent stops updating the spec.'));
-    console.log(chalk.white('  This could run for a very long time.'));
-    console.log(chalk.gray('  (Interrupt anytime with Ctrl+C)'));
+    console.log(chalk.white('These files will continue until the agent stops updating the spec.'));
+    console.log(chalk.white('This could run for a very long time.'));
+    console.log(chalk.gray('(Interrupt anytime with Ctrl+C)'));
     this.newline();
   }
 }

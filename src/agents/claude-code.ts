@@ -294,19 +294,36 @@ export class ClaudeCodeAgent implements CodingAgent {
               // Assistant message chunk - display readable content
               for (const content of json.message.content) {
                 if (content.type === 'text' && content.text) {
-                  // Display text content with proper formatting
-                  process.stdout.write(`  ${content.text}\n\n`);
+                  // Display text content without indentation
+                  process.stdout.write(`${content.text}\n\n`);
                 } else if (content.type === 'tool_use') {
-                  // Show tool name in bold, no icons
+                  // Show tool name in bold with details
                   const toolName = content.name;
-                  process.stdout.write(chalk.bold(toolName) + '\n');
+                  const input = content.input || {};
+
+                  if (toolName === 'Read' && input.file_path) {
+                    process.stdout.write(chalk.bold('Read') + ` ${input.file_path}\n`);
+                  } else if (toolName === 'Write' && input.file_path) {
+                    process.stdout.write(chalk.bold('Write') + ` ${input.file_path}\n`);
+                  } else if (toolName === 'Edit' && input.file_path) {
+                    process.stdout.write(chalk.bold('Edit') + ` ${input.file_path}\n`);
+                  } else if (toolName === 'Bash' && input.command) {
+                    process.stdout.write(chalk.bold('Bash') + ` ${input.command}\n`);
+                  } else if (toolName === 'Glob' && input.pattern) {
+                    process.stdout.write(chalk.bold('Glob') + ` ${input.pattern}\n`);
+                  } else if (toolName === 'Grep' && input.pattern) {
+                    process.stdout.write(chalk.bold('Grep') + ` ${input.pattern}\n`);
+                  } else {
+                    // Other tools - just show name
+                    process.stdout.write(chalk.bold(toolName) + '\n');
+                  }
                 }
               }
             } else if (json.type === 'result') {
               // Final result
               lastResult = json.result || '';
               if (json.is_error) {
-                process.stderr.write(`\n  Error: ${lastResult}\n`);
+                process.stderr.write(`\nError: ${lastResult}\n`);
               }
             }
           } catch {
