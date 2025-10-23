@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import chalk from 'chalk';
 import { CodingAgent, GenerationResult, InvokeOptions } from '../types';
 import { Result, Ok, Err } from '../utils/result';
 import { ValidationError } from '../types/errors';
@@ -296,26 +297,9 @@ export class ClaudeCodeAgent implements CodingAgent {
                   // Display text content with proper formatting
                   process.stdout.write(`  ${content.text}\n\n`);
                 } else if (content.type === 'tool_use') {
-                  // Show tool usage with details
+                  // Show tool name in bold, no icons
                   const toolName = content.name;
-                  const input = content.input || {};
-
-                  if (toolName === 'Read' && input.file_path) {
-                    process.stdout.write(`  📖 Reading: ${input.file_path}\n\n`);
-                  } else if (toolName === 'Write' && input.file_path) {
-                    process.stdout.write(`  ✏️  Writing: ${input.file_path}\n\n`);
-                  } else if (toolName === 'Edit' && input.file_path) {
-                    process.stdout.write(`  ✏️  Editing: ${input.file_path}\n\n`);
-                  } else if (toolName === 'Bash' && input.command) {
-                    // Truncate long commands
-                    const cmd = input.command.length > 80
-                      ? input.command.substring(0, 77) + '...'
-                      : input.command;
-                    process.stdout.write(`  💻 Running: ${cmd}\n\n`);
-                  } else {
-                    // Other tools
-                    process.stdout.write(`  🔧 Using: ${toolName}\n\n`);
-                  }
+                  process.stdout.write(chalk.bold(toolName) + '\n');
                 }
               }
             } else if (json.type === 'result') {
