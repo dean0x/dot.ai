@@ -132,20 +132,15 @@ async function processSingleIteration(
   if (iteration > 0) {
     renderer.recursionIteration(iteration);
   }
-  renderer.debug(`Using agent: ${agent.name}`);
 
-  // Invoke agent
-  renderer.startSpinner('Generating with ' + agent.name + '...');
+  // Invoke agent with minimal spinner
+  renderer.startSpinner('Generating...');
   const result = await agent.invoke(prompt, {
     cwd,
     agentConfig: aiFile.frontmatter.agent_config,
     existingArtifacts: previousState?.artifacts,
   });
   renderer.stopSpinner();
-
-  // Agent completed
-  renderer.divider();
-  renderer.debug('Agent completed');
 
   if (!result.success) {
     renderer.error(`Failed: ${result.error}`);

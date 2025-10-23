@@ -84,33 +84,31 @@ export class OutputRenderer {
   }
 
   /**
-   * Increase indentation level
+   * Increase indentation level (no-op)
    */
   indent(): void {
-    this.currentIndent++;
+    // Indentation disabled
   }
 
   /**
-   * Decrease indentation level
+   * Decrease indentation level (no-op)
    */
   unindent(): void {
-    if (this.currentIndent > 0) {
-      this.currentIndent--;
-    }
+    // Indentation disabled
   }
 
   /**
-   * Reset indentation to zero
+   * Reset indentation to zero (no-op)
    */
   resetIndent(): void {
-    this.currentIndent = 0;
+    // Indentation disabled
   }
 
   /**
-   * Get indentation prefix
+   * Get indentation prefix (always returns empty string)
    */
   private getIndent(): string {
-    return '  '.repeat(this.currentIndent);
+    return '';
   }
 
   /**
@@ -203,6 +201,14 @@ export class OutputRenderer {
   newline(): void {
     this.stopSpinner();
     console.log();
+  }
+
+  /**
+   * Print a tool usage in bold
+   */
+  tool(toolName: string): void {
+    this.stopSpinner();
+    console.log(chalk.bold(toolName));
   }
 
   /**
