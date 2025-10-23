@@ -175,6 +175,8 @@ artifacts: []                    # Auto-tracked: generated files
 agent_config:                    # Optional: agent-specific config
   model: claude-sonnet-4
   allowedTools: "Read,Write,Edit"
+recursive: false                 # Optional: enable recursive processing
+max_recursion_depth: 10          # Optional: iteration limit (default: 10, or ∞)
 ---
 
 # Your Specification Title
@@ -189,6 +191,8 @@ The agent will implement this spec and generate artifacts.
 - **`agent`** (required): Which coding agent to use (`claude-code`, `cursor`, `aider`)
 - **`artifacts`** (auto-tracked): List of generated files - updated automatically
 - **`agent_config`** (optional): Agent-specific configuration
+- **`recursive`** (optional): Enable recursive processing (default: `false`)
+- **`max_recursion_depth`** (optional): Maximum iterations (default: `10`, or `"∞"` for infinite)
 
 ### Agent Configuration
 
@@ -244,6 +248,74 @@ Artifacts are **editable**! When you run `dot gen` after editing both the spec a
 - The agent receives the current artifact state
 - The agent sees the spec diff
 - The agent intelligently merges changes
+
+### Recursive Processing (Agent Self-Modification)
+
+dot.ai supports **agent self-modification** - agents can edit their own `.ai` spec file to create self-directed task queues.
+
+#### How It Works
+
+When `recursive: true` is set:
+
+1. Agent generates artifacts based on current spec
+2. Agent **updates the `.ai` spec** with next task/requirements
+3. If spec content changed, dot.ai runs generation again with updated spec
+4. Agent controls convergence by **not modifying** the spec when work is complete
+
+```markdown
+---
+agent: claude-code
+artifacts: []
+recursive: true
+max_recursion_depth: 5
+---
+
+# Multi-Stage Feature
+
+Build a complete authentication system:
+1. User model and database schema
+2. Registration endpoint
+3. Login endpoint with JWT
+4. Password reset flow
+
+(Agent will update this spec after each stage to queue the next task)
+```
+
+#### Convergence
+
+The agent signals completion by not updating the spec:
+- **Spec changed** → Continue to next iteration
+- **Spec unchanged** → Work complete, stop
+- **Max depth reached** → Stop with warning
+
+#### Iteration Limits
+
+```yaml
+# Stop after 10 iterations (default)
+recursive: true
+max_recursion_depth: 10
+
+# Stop after 5 iterations
+recursive: true
+max_recursion_depth: 5
+
+# Run until agent decides to stop (∞ symbol)
+recursive: true
+max_recursion_depth: ∞
+```
+
+**Warning**: Infinite mode (`∞`) requires careful spec design. The agent must have clear completion criteria.
+
+#### Example Use Cases
+
+- **Multi-stage implementations**: Agent breaks down large features into sequential steps
+- **Iterative refinement**: Agent generates, reviews, and improves its own output
+- **Test-driven development**: Agent writes tests, implements code, refines until tests pass
+- **Documentation generation**: Agent generates docs, reviews for completeness, adds missing sections
+
+#### Pattern Details
+
+For implementation details about the agent self-modification pattern, see [CLAUDE.md](./CLAUDE.md).
 
 ## Configuration
 
