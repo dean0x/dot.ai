@@ -173,68 +173,72 @@ export class ClaudeCodeAgent implements CodingAgent {
     }
   }
 
+  /**
+   * Build command-line arguments for claude command
+   * Extracted from runClaudeCode for better testability and maintainability
+   */
+  private buildArguments(prompt: string, options: InvokeOptions): string[] {
+    const args = [
+      '-p', // Print mode (headless, already non-interactive)
+      prompt,
+      '--output-format', 'stream-json', // Stream output in real-time
+      '--verbose', // Required for stream-json with --print
+      '--dangerously-skip-permissions', // Skip all permission prompts for fully unattended execution
+    ];
+
+    // Add agent-specific configuration with security validation
+    if (options.agentConfig) {
+      const config = options.agentConfig as Record<string, unknown>;
+
+      // Security: Validate model name against whitelist
+      if (config.model) {
+        const modelResult = validateModel(String(config.model));
+        if (modelResult.ok === false) {
+          throw new Error(modelResult.error.message);
+        }
+        args.push('--model', modelResult.value);
+      }
+
+      // Security: Validate tool list format
+      if (config.allowedTools) {
+        const toolsResult = validateToolList(String(config.allowedTools));
+        if (toolsResult.ok === false) {
+          throw new Error(toolsResult.error.message);
+        }
+        args.push('--allowedTools', toolsResult.value);
+      }
+
+      // Security: Validate tool list format
+      if (config.disallowedTools) {
+        const toolsResult = validateToolList(String(config.disallowedTools));
+        if (toolsResult.ok === false) {
+          throw new Error(toolsResult.error.message);
+        }
+        args.push('--disallowedTools', toolsResult.value);
+      }
+
+      // Security: Sanitize system prompt
+      if (config.appendSystemPrompt) {
+        const sanitizedPrompt = sanitizeSystemPrompt(String(config.appendSystemPrompt));
+        args.push('--append-system-prompt', sanitizedPrompt);
+      }
+
+      // Security: Validate fallback model name against whitelist
+      if (config.fallbackModel) {
+        const modelResult = validateModel(String(config.fallbackModel));
+        if (modelResult.ok === false) {
+          throw new Error(modelResult.error.message);
+        }
+        args.push('--fallback-model', modelResult.value);
+      }
+    }
+
+    return args;
+  }
+
   private async runClaudeCode(prompt: string, options: InvokeOptions): Promise<string> {
     return new Promise((resolve, reject) => {
-      const args = [
-        '-p', // Print mode (headless, already non-interactive)
-        prompt,
-        '--output-format', 'stream-json', // Stream output in real-time
-        '--verbose', // Required for stream-json with --print
-        '--dangerously-skip-permissions', // Skip all permission prompts for fully unattended execution
-      ];
-
-      // Add agent-specific configuration with security validation
-      if (options.agentConfig) {
-        const config = options.agentConfig as Record<string, unknown>;
-
-        // Security: Validate model name against whitelist
-        if (config.model) {
-          const modelResult = validateModel(String(config.model));
-          if (modelResult.ok === false) {
-            throw new Error(modelResult.error.message);
-          }
-          args.push('--model', modelResult.value);
-        }
-
-        // Security: Validate tool list format
-        if (config.allowedTools) {
-          const toolsResult = validateToolList(String(config.allowedTools));
-          if (toolsResult.ok === false) {
-            throw new Error(toolsResult.error.message);
-          }
-          args.push('--allowedTools', toolsResult.value);
-        }
-
-        // Security: Validate tool list format
-        if (config.disallowedTools) {
-          const toolsResult = validateToolList(String(config.disallowedTools));
-          if (toolsResult.ok === false) {
-            throw new Error(toolsResult.error.message);
-          }
-          args.push('--disallowedTools', toolsResult.value);
-        }
-
-        // Security: Sanitize system prompt
-        if (config.appendSystemPrompt) {
-          const prompt = sanitizeSystemPrompt(String(config.appendSystemPrompt));
-          args.push('--append-system-prompt', prompt);
-        }
-
-        // Note: --verbose is already added by default for stream-json
-        // This is kept for backward compatibility if we change output format
-
-        // Security: Validate fallback model name against whitelist
-        if (config.fallbackModel) {
-          const modelResult = validateModel(String(config.fallbackModel));
-          if (modelResult.ok === false) {
-            throw new Error(modelResult.error.message);
-          }
-          args.push('--fallback-model', modelResult.value);
-        }
-
-        // Note: permission_mode is deprecated in favor of --dangerously-skip-permissions
-        // which provides full unattended execution for headless mode
-      }
+      const args = this.buildArguments(prompt, options);
 
       const proc = spawn('claude', args, {
         cwd: options.cwd,
