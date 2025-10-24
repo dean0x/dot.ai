@@ -10,6 +10,7 @@ import matter from 'gray-matter';
 import { Result, Ok, Err } from '../utils/result';
 import { SecurityError, ParseError, ValidationError } from '../types/errors';
 import { AiFileFrontmatter } from '../types';
+import { ArtifactFilenameSchema } from '../types/schemas';
 
 /**
  * Validate that a file path is within the allowed base directory
@@ -123,6 +124,21 @@ export function validateFrontmatter(
         { artifacts }
       )
     );
+  }
+
+  // Validate artifact filenames for security (no special characters)
+  for (const artifact of artifacts) {
+    const filenameResult = ArtifactFilenameSchema.safeParse(artifact);
+    if (!filenameResult.success) {
+      const error = filenameResult.error.errors[0];
+      return new Err(
+        new ValidationError(
+          `Invalid artifact filename "${artifact}": ${error?.message || 'Must contain only alphanumeric characters, underscores, hyphens, and dots'}`,
+          'INVALID_ARTIFACTS',
+          { artifact, invalidFilenames: artifacts.filter(a => !ArtifactFilenameSchema.safeParse(a).success) }
+        )
+      );
+    }
   }
 
   // Validate agent_config field (optional)
