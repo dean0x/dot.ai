@@ -290,30 +290,32 @@ export class ClaudeCodeAgent implements CodingAgent {
                   const input = content.input || {};
 
                   if (toolName === 'Read' && input.file_path) {
-                    process.stdout.write(chalk.bold('Read') + ` ${input.file_path}\n`);
+                    process.stdout.write(chalk.bold('Read') + ` ${input.file_path}\n\n`);
                   } else if (toolName === 'Write' && input.file_path) {
-                    process.stdout.write(chalk.bold('Write') + ` ${input.file_path}\n`);
+                    process.stdout.write(chalk.bold('Write') + ` ${input.file_path}\n\n`);
                   } else if (toolName === 'Edit' && input.file_path) {
-                    process.stdout.write(chalk.bold('Edit') + ` ${input.file_path}\n`);
+                    process.stdout.write(chalk.bold('Edit') + ` ${input.file_path}\n\n`);
                   } else if (toolName === 'Bash' && input.command) {
-                    process.stdout.write(chalk.bold('Bash') + ` ${input.command}\n`);
+                    process.stdout.write(chalk.bold('Bash') + ` ${input.command}\n\n`);
                   } else if (toolName === 'Glob' && input.pattern) {
-                    process.stdout.write(chalk.bold('Glob') + ` ${input.pattern}\n`);
+                    process.stdout.write(chalk.bold('Glob') + ` ${input.pattern}\n\n`);
                   } else if (toolName === 'Grep' && input.pattern) {
-                    process.stdout.write(chalk.bold('Grep') + ` ${input.pattern}\n`);
+                    process.stdout.write(chalk.bold('Grep') + ` ${input.pattern}\n\n`);
                   } else {
                     // Other tools - just show name
-                    process.stdout.write(chalk.bold(toolName) + '\n');
+                    process.stdout.write(chalk.bold(toolName) + '\n\n');
                   }
                 } else if (content.type === 'tool_result') {
                   // Show tool results if available
                   const toolResult = content.content;
                   if (toolResult && typeof toolResult === 'string' && toolResult.trim()) {
-                    // Show truncated tool output (first 200 chars)
-                    const truncated = toolResult.length > 200
-                      ? toolResult.substring(0, 200) + '...'
-                      : toolResult;
-                    process.stdout.write(chalk.gray(truncated) + '\n');
+                    // Show first 5 lines of tool output
+                    const lines = toolResult.split('\n');
+                    const firstFiveLines = lines.slice(0, 5).join('\n');
+                    const truncated = lines.length > 5
+                      ? firstFiveLines + '\n...'
+                      : firstFiveLines;
+                    process.stdout.write(chalk.gray(truncated) + '\n\n');
                   }
                 }
               }
@@ -321,11 +323,17 @@ export class ClaudeCodeAgent implements CodingAgent {
               // User messages (if any)
               for (const content of json.message.content) {
                 if (content.type === 'text' && content.text) {
-                  process.stdout.write(chalk.cyan('User: ') + content.text + '\n');
+                  process.stdout.write(chalk.cyan('User: ') + content.text + '\n\n');
                 } else if (content.type === 'tool_result') {
                   // Tool result from user side
                   if (content.content) {
-                    process.stdout.write(chalk.gray(String(content.content).substring(0, 200)) + '\n');
+                    const result = String(content.content);
+                    const lines = result.split('\n');
+                    const firstFiveLines = lines.slice(0, 5).join('\n');
+                    const truncated = lines.length > 5
+                      ? firstFiveLines + '\n...'
+                      : firstFiveLines;
+                    process.stdout.write(chalk.gray(truncated) + '\n\n');
                   }
                 }
               }
