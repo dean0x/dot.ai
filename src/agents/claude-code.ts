@@ -99,6 +99,17 @@ function sanitizeSystemPrompt(prompt: string): string {
 }
 
 /**
+ * Tool information for buffered display
+ */
+interface ToolInfo {
+  name: string;
+  displayText: string;
+  result?: string;
+  isError?: boolean;
+  completed: boolean;
+}
+
+/**
  * Claude Code agent implementation
  */
 export class ClaudeCodeAgent implements CodingAgent {
@@ -171,6 +182,39 @@ export class ClaudeCodeAgent implements CodingAgent {
       // If parsing fails, return empty array
       return [];
     }
+  }
+
+  /**
+   * Build display text for a tool invocation
+   * Extracted for better readability and maintainability
+   */
+  private buildToolDisplayText(toolName: string, input: Record<string, unknown>): string {
+    if (toolName === 'Read' && input.file_path) {
+      return chalk.bold('Read') + ` ${input.file_path}\n`;
+    } else if (toolName === 'Write' && input.file_path) {
+      return chalk.bold('Write') + ` ${input.file_path}\n`;
+    } else if (toolName === 'Edit' && input.file_path) {
+      return chalk.bold('Edit') + ` ${input.file_path}\n`;
+    } else if (toolName === 'Bash' && input.command) {
+      return chalk.bold('Bash') + ` ${input.command}\n`;
+    } else if (toolName === 'Glob' && input.pattern) {
+      return chalk.bold('Glob') + ` ${input.pattern}\n`;
+    } else if (toolName === 'Grep' && input.pattern) {
+      return chalk.bold('Grep') + ` ${input.pattern}\n`;
+    } else {
+      return chalk.bold(toolName) + '\n';
+    }
+  }
+
+  /**
+   * Format tool result for display
+   * Strips line numbers and truncates to first 5 lines
+   */
+  private formatToolResult(toolResult: string): string {
+    const cleanedResult = stripLineNumbers(toolResult);
+    const lines = cleanedResult.split('\n');
+    const firstFiveLines = lines.slice(0, 5).join('\n');
+    return lines.length > 5 ? firstFiveLines + '\n...' : firstFiveLines;
   }
 
   /**
@@ -250,13 +294,6 @@ export class ClaudeCodeAgent implements CodingAgent {
       let lastResult = '';
 
       // Buffering system for ordered tool display
-      interface ToolInfo {
-        name: string;
-        displayText: string;
-        result?: string;
-        isError?: boolean;
-        completed: boolean;
-      }
       const toolQueue: string[] = []; // Order of tool IDs
       const toolBuffer = new Map<string, ToolInfo>(); // tool_id → tool info
 
@@ -325,22 +362,7 @@ export class ClaudeCodeAgent implements CodingAgent {
 
                   if (toolId) {
                     // Build display text for this tool
-                    let displayText = '';
-                    if (toolName === 'Read' && input.file_path) {
-                      displayText = chalk.bold('Read') + ` ${input.file_path}\n`;
-                    } else if (toolName === 'Write' && input.file_path) {
-                      displayText = chalk.bold('Write') + ` ${input.file_path}\n`;
-                    } else if (toolName === 'Edit' && input.file_path) {
-                      displayText = chalk.bold('Edit') + ` ${input.file_path}\n`;
-                    } else if (toolName === 'Bash' && input.command) {
-                      displayText = chalk.bold('Bash') + ` ${input.command}\n`;
-                    } else if (toolName === 'Glob' && input.pattern) {
-                      displayText = chalk.bold('Glob') + ` ${input.pattern}\n`;
-                    } else if (toolName === 'Grep' && input.pattern) {
-                      displayText = chalk.bold('Grep') + ` ${input.pattern}\n`;
-                    } else {
-                      displayText = chalk.bold(toolName) + '\n';
-                    }
+                    const displayText = this.buildToolDisplayText(toolName, input);
 
                     // Add to buffer and queue
                     toolQueue.push(toolId);
@@ -367,14 +389,8 @@ export class ClaudeCodeAgent implements CodingAgent {
                     const toolInfo = toolBuffer.get(toolUseId)!;
 
                     if (toolResult && typeof toolResult === 'string' && toolResult.trim()) {
-                      // Strip line numbers and format first 5 lines of tool output
-                      const cleanedResult = stripLineNumbers(toolResult);
-                      const lines = cleanedResult.split('\n');
-                      const firstFiveLines = lines.slice(0, 5).join('\n');
-                      const truncated = lines.length > 5
-                        ? firstFiveLines + '\n...'
-                        : firstFiveLines;
-                      toolInfo.result = truncated;
+                      // Format and truncate tool output
+                      toolInfo.result = this.formatToolResult(toolResult);
                       toolInfo.isError = isError;
                     }
 
