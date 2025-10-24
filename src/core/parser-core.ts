@@ -130,7 +130,7 @@ export function validateFrontmatter(
   for (const artifact of artifacts) {
     const filenameResult = ArtifactFilenameSchema.safeParse(artifact);
     if (!filenameResult.success) {
-      const error = filenameResult.error.errors[0];
+      const error = filenameResult.error.issues[0];
       return new Err(
         new ValidationError(
           `Invalid artifact filename "${artifact}": ${error?.message || 'Must contain only alphanumeric characters, underscores, hyphens, and dots'}`,

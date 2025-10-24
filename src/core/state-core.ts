@@ -75,7 +75,7 @@ export function validateState(data: unknown): Result<DotAiState, ValidationError
   const result = DotAiStateSchema.safeParse(data);
 
   if (!result.success) {
-    const errors = result.error?.errors || [];
+    const errors = result.error?.issues || [];
     const firstError = errors[0];
     const message = firstError
       ? `Invalid state structure: ${firstError.message} at ${firstError.path.join('.')}`
@@ -102,7 +102,7 @@ export function validateFileState(data: unknown): Result<AiFileState, Validation
   const result = AiFileStateSchema.safeParse(data);
 
   if (!result.success) {
-    const errors = result.error?.errors || [];
+    const errors = result.error?.issues || [];
     const firstError = errors[0];
     const message = firstError
       ? `Invalid file state: ${firstError.message} at ${firstError.path.join('.')}`
@@ -129,7 +129,7 @@ export function validateConfig(data: unknown): Result<DotAiConfig, ValidationErr
   const result = DotAiConfigSchema.safeParse(data);
 
   if (!result.success) {
-    const errors = result.error?.errors || [];
+    const errors = result.error?.issues || [];
     const firstError = errors[0];
     const message = firstError
       ? `Invalid config structure: ${firstError.message} at ${firstError.path.join('.')}`
