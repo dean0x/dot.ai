@@ -29,6 +29,8 @@ program
   .command('gen [path]')
   .description('Generate code from .ai files (defaults to current directory)')
   .option('-f, --force', 'Force regenerate all .ai files regardless of changes')
+  .option('-p, --parallel', 'Enable parallel processing for multiple files (faster but output may interleave)')
+  .option('-c, --concurrency <number>', 'Max number of concurrent files when using --parallel (default: 5)', parseInt)
   .action(genCommand);
 
 program

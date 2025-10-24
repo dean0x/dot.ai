@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import * as path from 'path';
 import * as readline from 'readline';
+import pLimit from 'p-limit';
 import { ParserService } from '../../core/parser-service';
 import { StateService } from '../../core/state-service';
 import { NodeFileSystem } from '../../infrastructure/fs-adapter';
@@ -15,6 +16,8 @@ import { OutputRenderer } from '../output-renderer';
 
 interface GenOptions {
   force?: boolean;
+  parallel?: boolean;
+  concurrency?: number;
 }
 
 // Maximum recursion depth to prevent infinite loops
@@ -428,51 +431,117 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
 
     renderer.header(`Processing ${filesToProcess.length} file(s)...`);
 
-    // Process each file sequentially
     let successCount = 0;
     let failCount = 0;
 
-    for (let i = 0; i < filesToProcess.length; i++) {
-      const aiFile = filesToProcess[i];
-      const fileNum = i + 1;
-      const fileName = path.basename(aiFile.path);
+    // Choose processing mode: parallel (opt-in) or sequential (default)
+    if (options.parallel && filesToProcess.length > 1) {
+      // PARALLEL MODE: Process multiple files concurrently with p-limit
+      const concurrency = options.concurrency || 5;
+      renderer.debug(`Parallel processing enabled (max ${concurrency} concurrent files)`);
 
-      renderer.fileHeader(fileNum, filesToProcess.length, fileName);
-      renderer.indent();
+      const limit = pLimit(concurrency);
 
-      try {
-        // Process file (potentially recursively)
-        const processResult = await processFileRecursively(
-          aiFile,
-          state,
-          parserService,
-          cwd,
-          renderer
-        );
+      // Create processing tasks
+      const processingTasks = filesToProcess.map((aiFile, i) =>
+        limit(async () => {
+          const fileNum = i + 1;
+          const fileName = path.basename(aiFile.path);
 
-        // Update state with result
-        state = processResult.updatedState;
+          renderer.fileHeader(fileNum, filesToProcess.length, fileName);
+          renderer.indent();
 
-        if (processResult.success) {
-          renderer.success('Success');
+          try {
+            // Process file (potentially recursively)
+            const processResult = await processFileRecursively(
+              aiFile,
+              state,
+              parserService,
+              cwd,
+              renderer
+            );
 
-          // Display metrics summary
-          const metrics = processResult.metrics;
-          if (metrics.totalIterations > 1 || aiFile.frontmatter.recursive) {
-            renderer.recursionSummary(metrics);
+            renderer.unindent();
+            renderer.newline();
+
+            if (processResult.success) {
+              renderer.success('Success');
+
+              // Display metrics summary
+              const metrics = processResult.metrics;
+              if (metrics.totalIterations > 1 || aiFile.frontmatter.recursive) {
+                renderer.recursionSummary(metrics);
+              }
+
+              return { success: true as const, updatedState: processResult.updatedState };
+            } else {
+              return { success: false as const, updatedState: processResult.updatedState };
+            }
+          } catch (error) {
+            renderer.error(`Error: ${error instanceof Error ? error.message : String(error)}`, error as Error);
+            renderer.unindent();
+            renderer.newline();
+            return { success: false as const, updatedState: state };
           }
+        })
+      );
 
+      // Wait for all files to process
+      const results = await Promise.all(processingTasks);
+
+      // Apply state updates and count successes/failures
+      for (const result of results) {
+        state = result.updatedState;
+        if (result.success) {
           successCount++;
         } else {
           failCount++;
         }
-      } catch (error) {
-        renderer.error(`Error: ${error instanceof Error ? error.message : String(error)}`, error as Error);
-        failCount++;
       }
+    } else {
+      // SEQUENTIAL MODE: Process files one at a time (default)
+      for (let i = 0; i < filesToProcess.length; i++) {
+        const aiFile = filesToProcess[i];
+        const fileNum = i + 1;
+        const fileName = path.basename(aiFile.path);
 
-      renderer.unindent();
-      renderer.newline();
+        renderer.fileHeader(fileNum, filesToProcess.length, fileName);
+        renderer.indent();
+
+        try {
+          // Process file (potentially recursively)
+          const processResult = await processFileRecursively(
+            aiFile,
+            state,
+            parserService,
+            cwd,
+            renderer
+          );
+
+          // Update state with result
+          state = processResult.updatedState;
+
+          if (processResult.success) {
+            renderer.success('Success');
+
+            // Display metrics summary
+            const metrics = processResult.metrics;
+            if (metrics.totalIterations > 1 || aiFile.frontmatter.recursive) {
+              renderer.recursionSummary(metrics);
+            }
+
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (error) {
+          renderer.error(`Error: ${error instanceof Error ? error.message : String(error)}`, error as Error);
+          failCount++;
+        }
+
+        renderer.unindent();
+        renderer.newline();
+      }
     }
 
     // Save updated state
