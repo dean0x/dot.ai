@@ -263,6 +263,7 @@ export class ClaudeCodeAgent implements CodingAgent {
       let stdout = '';
       let stderr = '';
       let lastResult = '';
+      let lastToolName = ''; // Track last tool for labeling results
 
       // Stream stdout to console while capturing
       proc.stdout.on('data', (data) => {
@@ -288,34 +289,40 @@ export class ClaudeCodeAgent implements CodingAgent {
                   // Show tool name in bold with details
                   const toolName = content.name;
                   const input = content.input || {};
+                  lastToolName = toolName; // Track for result labeling
 
                   if (toolName === 'Read' && input.file_path) {
-                    process.stdout.write(chalk.bold('Read') + ` ${input.file_path}\n\n`);
+                    process.stdout.write(chalk.bold('Read') + ` ${input.file_path}\n`);
                   } else if (toolName === 'Write' && input.file_path) {
-                    process.stdout.write(chalk.bold('Write') + ` ${input.file_path}\n\n`);
+                    process.stdout.write(chalk.bold('Write') + ` ${input.file_path}\n`);
                   } else if (toolName === 'Edit' && input.file_path) {
-                    process.stdout.write(chalk.bold('Edit') + ` ${input.file_path}\n\n`);
+                    process.stdout.write(chalk.bold('Edit') + ` ${input.file_path}\n`);
                   } else if (toolName === 'Bash' && input.command) {
-                    process.stdout.write(chalk.bold('Bash') + ` ${input.command}\n\n`);
+                    process.stdout.write(chalk.bold('Bash') + ` ${input.command}\n`);
                   } else if (toolName === 'Glob' && input.pattern) {
-                    process.stdout.write(chalk.bold('Glob') + ` ${input.pattern}\n\n`);
+                    process.stdout.write(chalk.bold('Glob') + ` ${input.pattern}\n`);
                   } else if (toolName === 'Grep' && input.pattern) {
-                    process.stdout.write(chalk.bold('Grep') + ` ${input.pattern}\n\n`);
+                    process.stdout.write(chalk.bold('Grep') + ` ${input.pattern}\n`);
                   } else {
                     // Other tools - just show name
-                    process.stdout.write(chalk.bold(toolName) + '\n\n');
+                    process.stdout.write(chalk.bold(toolName) + '\n');
                   }
                 } else if (content.type === 'tool_result') {
-                  // Show tool results if available
+                  // Show tool results with label
                   const toolResult = content.content;
                   if (toolResult && typeof toolResult === 'string' && toolResult.trim()) {
-                    // Show first 5 lines of tool output
+                    // Show first 5 lines of tool output with tool name prefix
                     const lines = toolResult.split('\n');
                     const firstFiveLines = lines.slice(0, 5).join('\n');
                     const truncated = lines.length > 5
                       ? firstFiveLines + '\n...'
                       : firstFiveLines;
-                    process.stdout.write(chalk.gray(truncated) + '\n\n');
+                    // Prefix with tool name to show connection
+                    if (lastToolName) {
+                      process.stdout.write(chalk.gray(`↳ ${lastToolName}: `) + chalk.gray(truncated) + '\n\n');
+                    } else {
+                      process.stdout.write(chalk.gray(truncated) + '\n\n');
+                    }
                   }
                 }
               }
