@@ -140,3 +140,6 @@ export interface ChangeDetectionResult {
   /** .ai files that are unchanged */
   unchanged: AiFile[];
 }
+
+// Export OutputWriter types
+export * from './output-writer';

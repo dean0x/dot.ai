@@ -1,7 +1,10 @@
 import { spawn } from 'child_process';
+import chalk from 'chalk';
+import ora from 'ora';
 import { CodingAgent, GenerationResult, InvokeOptions } from '../types';
 import { Result, Ok, Err } from '../utils/result';
 import { ValidationError } from '../types/errors';
+import { stripLineNumbers, cleanErrorMessage } from '../utils/output-formatting';
 
 /**
  * Security: Whitelisted allowed models to prevent command injection
@@ -16,11 +19,6 @@ const ALLOWED_MODELS = [
   'opus',
   'haiku',
 ];
-
-/**
- * Security: Whitelisted permission modes
- */
-const ALLOWED_PERMISSION_MODES = ['acceptEdits', 'bypassPermissions', 'default', 'plan'];
 
 /**
  * Security: Validate tool name format to prevent injection
@@ -74,22 +72,6 @@ function validateModel(model: string): Result<string, ValidationError> {
     );
   }
   return new Ok(model);
-}
-
-/**
- * Security: Validate permission mode
- */
-function validatePermissionMode(mode: string): Result<string, ValidationError> {
-  if (!ALLOWED_PERMISSION_MODES.includes(mode)) {
-    return new Err(
-      new ValidationError(
-        `Invalid permission_mode: "${mode}". Allowed modes: ${ALLOWED_PERMISSION_MODES.join(', ')}`,
-        'INVALID_PERMISSION_MODE',
-        { mode, allowedModes: ALLOWED_PERMISSION_MODES }
-      )
-    );
-  }
-  return new Ok(mode);
 }
 
 /**
@@ -198,7 +180,7 @@ export class ClaudeCodeAgent implements CodingAgent {
         prompt,
         '--output-format', 'stream-json', // Stream output in real-time
         '--verbose', // Required for stream-json with --print
-        '--permission-mode', 'acceptEdits', // Auto-accept file edits in headless mode
+        '--dangerously-skip-permissions', // Skip all permission prompts for fully unattended execution
       ];
 
       // Add agent-specific configuration with security validation
@@ -250,20 +232,8 @@ export class ClaudeCodeAgent implements CodingAgent {
           args.push('--fallback-model', modelResult.value);
         }
 
-        // Security: Validate permission mode against whitelist
-        // Override default permission mode if specified
-        if (config.permission_mode) {
-          const modeResult = validatePermissionMode(String(config.permission_mode));
-          if (modeResult.ok === false) {
-            throw new Error(modeResult.error.message);
-          }
-          // Remove the default we added above
-          const permIdx = args.indexOf('--permission-mode');
-          if (permIdx !== -1) {
-            args.splice(permIdx, 2);
-          }
-          args.push('--permission-mode', modeResult.value);
-        }
+        // Note: permission_mode is deprecated in favor of --dangerously-skip-permissions
+        // which provides full unattended execution for headless mode
       }
 
       const proc = spawn('claude', args, {
@@ -274,6 +244,54 @@ export class ClaudeCodeAgent implements CodingAgent {
       let stdout = '';
       let stderr = '';
       let lastResult = '';
+
+      // Buffering system for ordered tool display
+      interface ToolInfo {
+        name: string;
+        displayText: string;
+        result?: string;
+        isError?: boolean;
+        completed: boolean;
+      }
+      const toolQueue: string[] = []; // Order of tool IDs
+      const toolBuffer = new Map<string, ToolInfo>(); // tool_id → tool info
+
+      // Start spinner at bottom of output
+      const spinner = ora({
+        text: '',
+        color: 'cyan',
+        indent: 0,
+      }).start();
+
+      // Display next completed tool in queue
+      const displayNextTool = () => {
+        while (toolQueue.length > 0) {
+          const nextToolId = toolQueue[0];
+          const toolInfo = toolBuffer.get(nextToolId);
+
+          if (toolInfo && toolInfo.completed) {
+            // Display tool and result together
+            process.stdout.write(toolInfo.displayText);
+            if (toolInfo.result) {
+              if (toolInfo.isError) {
+                const cleanError = cleanErrorMessage(toolInfo.result);
+                process.stdout.write(chalk.red(`✗ ${cleanError}`) + '\n\n');
+              } else {
+                process.stdout.write(chalk.gray(`↳ `) + chalk.gray(toolInfo.result) + '\n\n');
+              }
+            } else {
+              process.stdout.write('\n');
+            }
+
+            // Remove from queue and buffer
+            toolQueue.shift();
+            toolBuffer.delete(nextToolId);
+          } else {
+            // Next tool not ready yet, stop
+            break;
+          }
+        }
+      };
 
       // Stream stdout to console while capturing
       proc.stdout.on('data', (data) => {
@@ -293,28 +311,73 @@ export class ClaudeCodeAgent implements CodingAgent {
               // Assistant message chunk - display readable content
               for (const content of json.message.content) {
                 if (content.type === 'text' && content.text) {
-                  // Display text content with proper formatting
-                  process.stdout.write(`  ${content.text}\n\n`);
+                  // Display text content immediately (not tool-related)
+                  process.stdout.write(`${content.text}\n\n`);
                 } else if (content.type === 'tool_use') {
-                  // Show tool usage with details
+                  // Buffer tool use - don't display yet
                   const toolName = content.name;
+                  const toolId = content.id;
                   const input = content.input || {};
 
-                  if (toolName === 'Read' && input.file_path) {
-                    process.stdout.write(`  📖 Reading: ${input.file_path}\n\n`);
-                  } else if (toolName === 'Write' && input.file_path) {
-                    process.stdout.write(`  ✏️  Writing: ${input.file_path}\n\n`);
-                  } else if (toolName === 'Edit' && input.file_path) {
-                    process.stdout.write(`  ✏️  Editing: ${input.file_path}\n\n`);
-                  } else if (toolName === 'Bash' && input.command) {
-                    // Truncate long commands
-                    const cmd = input.command.length > 80
-                      ? input.command.substring(0, 77) + '...'
-                      : input.command;
-                    process.stdout.write(`  💻 Running: ${cmd}\n\n`);
-                  } else {
-                    // Other tools
-                    process.stdout.write(`  🔧 Using: ${toolName}\n\n`);
+                  if (toolId) {
+                    // Build display text for this tool
+                    let displayText = '';
+                    if (toolName === 'Read' && input.file_path) {
+                      displayText = chalk.bold('Read') + ` ${input.file_path}\n`;
+                    } else if (toolName === 'Write' && input.file_path) {
+                      displayText = chalk.bold('Write') + ` ${input.file_path}\n`;
+                    } else if (toolName === 'Edit' && input.file_path) {
+                      displayText = chalk.bold('Edit') + ` ${input.file_path}\n`;
+                    } else if (toolName === 'Bash' && input.command) {
+                      displayText = chalk.bold('Bash') + ` ${input.command}\n`;
+                    } else if (toolName === 'Glob' && input.pattern) {
+                      displayText = chalk.bold('Glob') + ` ${input.pattern}\n`;
+                    } else if (toolName === 'Grep' && input.pattern) {
+                      displayText = chalk.bold('Grep') + ` ${input.pattern}\n`;
+                    } else {
+                      displayText = chalk.bold(toolName) + '\n';
+                    }
+
+                    // Add to buffer and queue
+                    toolQueue.push(toolId);
+                    toolBuffer.set(toolId, {
+                      name: toolName,
+                      displayText,
+                      completed: false,
+                    });
+                  }
+                }
+              }
+            } else if (json.type === 'user' && json.message?.content) {
+              // User messages containing tool results
+              for (const content of json.message.content) {
+                if (content.type === 'text' && content.text) {
+                  process.stdout.write(chalk.cyan('User: ') + content.text + '\n\n');
+                } else if (content.type === 'tool_result') {
+                  // Mark tool as completed with result
+                  const toolResult = content.content;
+                  const toolUseId = content.tool_use_id;
+                  const isError = content.is_error;
+
+                  if (toolUseId && toolBuffer.has(toolUseId)) {
+                    const toolInfo = toolBuffer.get(toolUseId)!;
+
+                    if (toolResult && typeof toolResult === 'string' && toolResult.trim()) {
+                      // Strip line numbers and format first 5 lines of tool output
+                      const cleanedResult = stripLineNumbers(toolResult);
+                      const lines = cleanedResult.split('\n');
+                      const firstFiveLines = lines.slice(0, 5).join('\n');
+                      const truncated = lines.length > 5
+                        ? firstFiveLines + '\n...'
+                        : firstFiveLines;
+                      toolInfo.result = truncated;
+                      toolInfo.isError = isError;
+                    }
+
+                    toolInfo.completed = true;
+
+                    // Try to display completed tools in order
+                    displayNextTool();
                   }
                 }
               }
@@ -322,7 +385,7 @@ export class ClaudeCodeAgent implements CodingAgent {
               // Final result
               lastResult = json.result || '';
               if (json.is_error) {
-                process.stderr.write(`\n  Error: ${lastResult}\n`);
+                process.stderr.write(`\nError: ${lastResult}\n`);
               }
             }
           } catch {
@@ -340,6 +403,7 @@ export class ClaudeCodeAgent implements CodingAgent {
       });
 
       proc.on('close', (code) => {
+        spinner.stop();
         if (code === 0) {
           resolve(stdout);
         } else {
@@ -348,6 +412,7 @@ export class ClaudeCodeAgent implements CodingAgent {
       });
 
       proc.on('error', (error) => {
+        spinner.stop();
         reject(new Error(`Failed to spawn claude: ${error.message}`));
       });
     });
