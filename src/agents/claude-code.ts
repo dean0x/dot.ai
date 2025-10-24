@@ -263,7 +263,7 @@ export class ClaudeCodeAgent implements CodingAgent {
       let stdout = '';
       let stderr = '';
       let lastResult = '';
-      let lastToolName = ''; // Track last tool for labeling results
+      const toolMap = new Map<string, string>(); // Map tool_use_id to tool name
 
       // Stream stdout to console while capturing
       proc.stdout.on('data', (data) => {
@@ -288,8 +288,13 @@ export class ClaudeCodeAgent implements CodingAgent {
                 } else if (content.type === 'tool_use') {
                   // Show tool name in bold with details
                   const toolName = content.name;
+                  const toolId = content.id;
                   const input = content.input || {};
-                  lastToolName = toolName; // Track for result labeling
+
+                  // Track tool ID for matching with results
+                  if (toolId) {
+                    toolMap.set(toolId, toolName);
+                  }
 
                   if (toolName === 'Read' && input.file_path) {
                     process.stdout.write(chalk.bold('Read') + ` ${input.file_path}\n`);
@@ -308,18 +313,22 @@ export class ClaudeCodeAgent implements CodingAgent {
                     process.stdout.write(chalk.bold(toolName) + '\n');
                   }
                 } else if (content.type === 'tool_result') {
-                  // Show tool results with label
+                  // Show tool results with label from tool map
                   const toolResult = content.content;
+                  const toolUseId = content.tool_use_id;
+
                   if (toolResult && typeof toolResult === 'string' && toolResult.trim()) {
-                    // Show first 5 lines of tool output with tool name prefix
+                    // Show first 5 lines of tool output
                     const lines = toolResult.split('\n');
                     const firstFiveLines = lines.slice(0, 5).join('\n');
                     const truncated = lines.length > 5
                       ? firstFiveLines + '\n...'
                       : firstFiveLines;
-                    // Prefix with tool name to show connection
-                    if (lastToolName) {
-                      process.stdout.write(chalk.gray(`↳ ${lastToolName}: `) + chalk.gray(truncated) + '\n\n');
+
+                    // Look up tool name from map
+                    const toolName = toolUseId ? toolMap.get(toolUseId) : null;
+                    if (toolName) {
+                      process.stdout.write(chalk.gray(`↳ ${toolName}: `) + chalk.gray(truncated) + '\n\n');
                     } else {
                       process.stdout.write(chalk.gray(truncated) + '\n\n');
                     }
