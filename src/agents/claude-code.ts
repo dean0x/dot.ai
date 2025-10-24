@@ -316,6 +316,7 @@ export class ClaudeCodeAgent implements CodingAgent {
                   // Show tool results with label from tool map
                   const toolResult = content.content;
                   const toolUseId = content.tool_use_id;
+                  const isError = content.is_error;
 
                   if (toolResult && typeof toolResult === 'string' && toolResult.trim()) {
                     // Show first 5 lines of tool output
@@ -327,10 +328,21 @@ export class ClaudeCodeAgent implements CodingAgent {
 
                     // Look up tool name from map
                     const toolName = toolUseId ? toolMap.get(toolUseId) : null;
-                    if (toolName) {
-                      process.stdout.write(chalk.gray(`↳ ${toolName}: `) + chalk.gray(truncated) + '\n\n');
+
+                    if (isError) {
+                      // Show errors in red
+                      if (toolName) {
+                        process.stdout.write(chalk.red(`✗ ${toolName} error: `) + chalk.red(truncated) + '\n\n');
+                      } else {
+                        process.stdout.write(chalk.red('✗ Error: ') + chalk.red(truncated) + '\n\n');
+                      }
                     } else {
-                      process.stdout.write(chalk.gray(truncated) + '\n\n');
+                      // Show success results in gray
+                      if (toolName) {
+                        process.stdout.write(chalk.gray(`↳ ${toolName}: `) + chalk.gray(truncated) + '\n\n');
+                      } else {
+                        process.stdout.write(chalk.gray(truncated) + '\n\n');
+                      }
                     }
                   }
                 }
