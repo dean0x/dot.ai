@@ -199,7 +199,7 @@ export class ClaudeCodeAgent implements CodingAgent {
         prompt,
         '--output-format', 'stream-json', // Stream output in real-time
         '--verbose', // Required for stream-json with --print
-        '--permission-mode', 'acceptEdits', // Auto-accept file edits in headless mode
+        '--dangerously-skip-permissions', // Skip all permission prompts for fully unattended execution
       ];
 
       // Add agent-specific configuration with security validation
@@ -251,20 +251,8 @@ export class ClaudeCodeAgent implements CodingAgent {
           args.push('--fallback-model', modelResult.value);
         }
 
-        // Security: Validate permission mode against whitelist
-        // Override default permission mode if specified
-        if (config.permission_mode) {
-          const modeResult = validatePermissionMode(String(config.permission_mode));
-          if (modeResult.ok === false) {
-            throw new Error(modeResult.error.message);
-          }
-          // Remove the default we added above
-          const permIdx = args.indexOf('--permission-mode');
-          if (permIdx !== -1) {
-            args.splice(permIdx, 2);
-          }
-          args.push('--permission-mode', modeResult.value);
-        }
+        // Note: permission_mode is deprecated in favor of --dangerously-skip-permissions
+        // which provides full unattended execution for headless mode
       }
 
       const proc = spawn('claude', args, {
