@@ -36,11 +36,20 @@ export const DotAiConfigSchema = z.object({
 /**
  * Schema for artifact filename validation
  * Prevents special characters that could cause filesystem issues
+ * SECURITY: Blocks path traversal patterns like ".." and "..."
  */
-export const ArtifactFilenameSchema = z.string().regex(
-  /^[a-zA-Z0-9_.-]+$/,
-  'Artifact filenames must contain only alphanumeric characters, underscores, hyphens, and dots'
-);
+export const ArtifactFilenameSchema = z
+  .string()
+  .regex(
+    /^[a-zA-Z0-9_.-]+$/,
+    'Artifact filenames must contain only alphanumeric characters, underscores, hyphens, and dots'
+  )
+  .refine(
+    (filename) => filename !== '..' && !filename.startsWith('..'),
+    {
+      message: 'Artifact filename cannot be ".." or start with ".." (path traversal)'
+    }
+  );
 
 /**
  * Export types inferred from schemas for type checking
