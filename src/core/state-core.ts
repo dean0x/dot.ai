@@ -7,6 +7,7 @@
 
 import * as path from 'path';
 import { DotAiState, AiFileState, DotAiConfig } from '../types';
+import { DotAiStateSchema, DotAiConfigSchema, AiFileStateSchema } from '../types/schemas';
 import { Result, Ok, Err, tryCatch } from '../utils/result';
 import { ParseError, ValidationError } from '../types/errors';
 
@@ -66,174 +67,84 @@ export function createEmptyState(): DotAiState {
 }
 
 /**
- * Validate state object structure
+ * Validate state object structure using Zod schema
  *
- * PURE: Validation logic only
+ * PURE: Validation logic only, no unsafe type assertions
  */
 export function validateState(data: unknown): Result<DotAiState, ValidationError> {
-  if (typeof data !== 'object' || data === null) {
+  const result = DotAiStateSchema.safeParse(data);
+
+  if (!result.success) {
+    const errors = result.error?.issues || [];
+    const firstError = errors[0];
+    const message = firstError
+      ? `Invalid state structure: ${firstError.message} at ${firstError.path.join('.')}`
+      : 'Invalid state structure';
+
     return new Err(
       new ValidationError(
-        'State must be an object',
+        message,
         'INVALID_CONFIG',
-        { receivedType: typeof data }
+        { zodError: errors, receivedData: data }
       )
     );
   }
 
-  const state = data as Record<string, unknown>;
-
-  // Validate version
-  if (typeof state.version !== 'string') {
-    return new Err(
-      new ValidationError(
-        'State version must be a string',
-        'INVALID_CONFIG',
-        { version: state.version }
-      )
-    );
-  }
-
-  // Validate files
-  if (typeof state.files !== 'object' || state.files === null) {
-    return new Err(
-      new ValidationError(
-        'State files must be an object',
-        'INVALID_CONFIG',
-        { files: state.files }
-      )
-    );
-  }
-
-  // Validate each file state
-  const files = state.files as Record<string, unknown>;
-  for (const [filePath, fileState] of Object.entries(files)) {
-    const validationResult = validateFileState(fileState);
-    if (validationResult.ok === false) {
-      return new Err(
-        new ValidationError(
-          `Invalid file state for "${filePath}": ${validationResult.error.message}`,
-          'INVALID_CONFIG',
-          { filePath, fileState }
-        )
-      );
-    }
-  }
-
-  return new Ok(state as unknown as DotAiState);
+  return new Ok(result.data);
 }
 
 /**
- * Validate file state structure
+ * Validate file state structure using Zod schema
  *
- * PURE: Validation logic only
+ * PURE: Validation logic only, no unsafe type assertions
  */
 export function validateFileState(data: unknown): Result<AiFileState, ValidationError> {
-  if (typeof data !== 'object' || data === null) {
+  const result = AiFileStateSchema.safeParse(data);
+
+  if (!result.success) {
+    const errors = result.error?.issues || [];
+    const firstError = errors[0];
+    const message = firstError
+      ? `Invalid file state: ${firstError.message} at ${firstError.path.join('.')}`
+      : 'Invalid file state';
+
     return new Err(
       new ValidationError(
-        'File state must be an object',
+        message,
         'INVALID_CONFIG',
-        { receivedType: typeof data }
+        { zodError: errors, receivedData: data }
       )
     );
   }
 
-  const fileState = data as Record<string, unknown>;
-
-  // Validate required fields
-  if (typeof fileState.lastHash !== 'string') {
-    return new Err(
-      new ValidationError(
-        'File state lastHash must be a string',
-        'INVALID_CONFIG',
-        { lastHash: fileState.lastHash }
-      )
-    );
-  }
-
-  if (typeof fileState.lastContent !== 'string') {
-    return new Err(
-      new ValidationError(
-        'File state lastContent must be a string',
-        'INVALID_CONFIG',
-        { lastContent: fileState.lastContent }
-      )
-    );
-  }
-
-  if (typeof fileState.lastGenerated !== 'string') {
-    return new Err(
-      new ValidationError(
-        'File state lastGenerated must be a string',
-        'INVALID_CONFIG',
-        { lastGenerated: fileState.lastGenerated }
-      )
-    );
-  }
-
-  if (!Array.isArray(fileState.artifacts)) {
-    return new Err(
-      new ValidationError(
-        'File state artifacts must be an array',
-        'INVALID_CONFIG',
-        { artifacts: fileState.artifacts }
-      )
-    );
-  }
-
-  if (!fileState.artifacts.every((a) => typeof a === 'string')) {
-    return new Err(
-      new ValidationError(
-        'File state artifacts must be an array of strings',
-        'INVALID_CONFIG',
-        { artifacts: fileState.artifacts }
-      )
-    );
-  }
-
-  return new Ok(fileState as unknown as AiFileState);
+  return new Ok(result.data);
 }
 
 /**
- * Validate config object structure
+ * Validate config object structure using Zod schema
  *
- * PURE: Validation logic only
+ * PURE: Validation logic only, no unsafe type assertions
  */
 export function validateConfig(data: unknown): Result<DotAiConfig, ValidationError> {
-  if (typeof data !== 'object' || data === null) {
+  const result = DotAiConfigSchema.safeParse(data);
+
+  if (!result.success) {
+    const errors = result.error?.issues || [];
+    const firstError = errors[0];
+    const message = firstError
+      ? `Invalid config structure: ${firstError.message} at ${firstError.path.join('.')}`
+      : 'Invalid config structure';
+
     return new Err(
       new ValidationError(
-        'Config must be an object',
+        message,
         'INVALID_CONFIG',
-        { receivedType: typeof data }
+        { zodError: errors, receivedData: data }
       )
     );
   }
 
-  const config = data as Record<string, unknown>;
-
-  if (typeof config.defaultAgent !== 'string') {
-    return new Err(
-      new ValidationError(
-        'Config defaultAgent must be a string',
-        'INVALID_CONFIG',
-        { defaultAgent: config.defaultAgent }
-      )
-    );
-  }
-
-  if (typeof config.stateFile !== 'string') {
-    return new Err(
-      new ValidationError(
-        'Config stateFile must be a string',
-        'INVALID_CONFIG',
-        { stateFile: config.stateFile }
-      )
-    );
-  }
-
-  return new Ok(config as unknown as DotAiConfig);
+  return new Ok(result.data);
 }
 
 /**

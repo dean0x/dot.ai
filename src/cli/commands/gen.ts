@@ -85,17 +85,31 @@ async function scanAllFiles(dir: string, baseDir: string = dir): Promise<string[
   return allFiles;
 }
 
+/**
+ * Metrics collected during recursive processing
+ */
 interface RecursionMetrics {
+  /** Total number of iterations executed */
   totalIterations: number;
+  /** Total time spent in milliseconds across all iterations */
   totalTimeMs: number;
+  /** Reason recursion stopped: 'natural' (agent signaled complete), 'max_depth' (hit limit), 'error' (failure), 'none' (non-recursive file) */
   convergenceReason: 'natural' | 'max_depth' | 'error' | 'none';
+  /** Time in milliseconds for each individual iteration */
   iterationTimes: number[];
 }
 
+/**
+ * Result from processing a single iteration of an .ai file
+ */
 interface SingleIterationResult {
+  /** Whether the iteration completed successfully */
   success: boolean;
+  /** Updated state after processing this iteration */
   updatedState: DotAiState;
+  /** Re-parsed .ai file after agent potentially modified it (null if re-parse failed) */
   updatedAiFile: AiFile | null;
+  /** Whether the agent modified the spec content (triggers another iteration if true) */
   specChanged: boolean;
 }
 

@@ -99,6 +99,17 @@ function sanitizeSystemPrompt(prompt: string): string {
 }
 
 /**
+ * Tool information for buffered display
+ */
+interface ToolInfo {
+  name: string;
+  displayText: string;
+  result?: string;
+  isError?: boolean;
+  completed: boolean;
+}
+
+/**
  * Claude Code agent implementation
  */
 export class ClaudeCodeAgent implements CodingAgent {
@@ -173,68 +184,105 @@ export class ClaudeCodeAgent implements CodingAgent {
     }
   }
 
+  /**
+   * Build display text for a tool invocation
+   * Extracted for better readability and maintainability
+   */
+  private buildToolDisplayText(toolName: string, input: Record<string, unknown>): string {
+    if (toolName === 'Read' && input.file_path) {
+      return chalk.bold('Read') + ` ${input.file_path}\n`;
+    } else if (toolName === 'Write' && input.file_path) {
+      return chalk.bold('Write') + ` ${input.file_path}\n`;
+    } else if (toolName === 'Edit' && input.file_path) {
+      return chalk.bold('Edit') + ` ${input.file_path}\n`;
+    } else if (toolName === 'Bash' && input.command) {
+      return chalk.bold('Bash') + ` ${input.command}\n`;
+    } else if (toolName === 'Glob' && input.pattern) {
+      return chalk.bold('Glob') + ` ${input.pattern}\n`;
+    } else if (toolName === 'Grep' && input.pattern) {
+      return chalk.bold('Grep') + ` ${input.pattern}\n`;
+    } else {
+      return chalk.bold(toolName) + '\n';
+    }
+  }
+
+  /**
+   * Format tool result for display
+   * Strips line numbers and truncates to first 5 lines
+   */
+  private formatToolResult(toolResult: string): string {
+    const cleanedResult = stripLineNumbers(toolResult);
+    const lines = cleanedResult.split('\n');
+    const firstFiveLines = lines.slice(0, 5).join('\n');
+    return lines.length > 5 ? firstFiveLines + '\n...' : firstFiveLines;
+  }
+
+  /**
+   * Build command-line arguments for claude command
+   * Extracted from runClaudeCode for better testability and maintainability
+   */
+  private buildArguments(prompt: string, options: InvokeOptions): string[] {
+    const args = [
+      '-p', // Print mode (headless, already non-interactive)
+      prompt,
+      '--output-format', 'stream-json', // Stream output in real-time
+      '--verbose', // Required for stream-json with --print
+      '--dangerously-skip-permissions', // Skip all permission prompts for fully unattended execution
+    ];
+
+    // Add agent-specific configuration with security validation
+    if (options.agentConfig) {
+      const config = options.agentConfig as Record<string, unknown>;
+
+      // Security: Validate model name against whitelist
+      if (config.model) {
+        const modelResult = validateModel(String(config.model));
+        if (modelResult.ok === false) {
+          throw new Error(modelResult.error.message);
+        }
+        args.push('--model', modelResult.value);
+      }
+
+      // Security: Validate tool list format
+      if (config.allowedTools) {
+        const toolsResult = validateToolList(String(config.allowedTools));
+        if (toolsResult.ok === false) {
+          throw new Error(toolsResult.error.message);
+        }
+        args.push('--allowedTools', toolsResult.value);
+      }
+
+      // Security: Validate tool list format
+      if (config.disallowedTools) {
+        const toolsResult = validateToolList(String(config.disallowedTools));
+        if (toolsResult.ok === false) {
+          throw new Error(toolsResult.error.message);
+        }
+        args.push('--disallowedTools', toolsResult.value);
+      }
+
+      // Security: Sanitize system prompt
+      if (config.appendSystemPrompt) {
+        const sanitizedPrompt = sanitizeSystemPrompt(String(config.appendSystemPrompt));
+        args.push('--append-system-prompt', sanitizedPrompt);
+      }
+
+      // Security: Validate fallback model name against whitelist
+      if (config.fallbackModel) {
+        const modelResult = validateModel(String(config.fallbackModel));
+        if (modelResult.ok === false) {
+          throw new Error(modelResult.error.message);
+        }
+        args.push('--fallback-model', modelResult.value);
+      }
+    }
+
+    return args;
+  }
+
   private async runClaudeCode(prompt: string, options: InvokeOptions): Promise<string> {
     return new Promise((resolve, reject) => {
-      const args = [
-        '-p', // Print mode (headless, already non-interactive)
-        prompt,
-        '--output-format', 'stream-json', // Stream output in real-time
-        '--verbose', // Required for stream-json with --print
-        '--dangerously-skip-permissions', // Skip all permission prompts for fully unattended execution
-      ];
-
-      // Add agent-specific configuration with security validation
-      if (options.agentConfig) {
-        const config = options.agentConfig as Record<string, unknown>;
-
-        // Security: Validate model name against whitelist
-        if (config.model) {
-          const modelResult = validateModel(String(config.model));
-          if (modelResult.ok === false) {
-            throw new Error(modelResult.error.message);
-          }
-          args.push('--model', modelResult.value);
-        }
-
-        // Security: Validate tool list format
-        if (config.allowedTools) {
-          const toolsResult = validateToolList(String(config.allowedTools));
-          if (toolsResult.ok === false) {
-            throw new Error(toolsResult.error.message);
-          }
-          args.push('--allowedTools', toolsResult.value);
-        }
-
-        // Security: Validate tool list format
-        if (config.disallowedTools) {
-          const toolsResult = validateToolList(String(config.disallowedTools));
-          if (toolsResult.ok === false) {
-            throw new Error(toolsResult.error.message);
-          }
-          args.push('--disallowedTools', toolsResult.value);
-        }
-
-        // Security: Sanitize system prompt
-        if (config.appendSystemPrompt) {
-          const prompt = sanitizeSystemPrompt(String(config.appendSystemPrompt));
-          args.push('--append-system-prompt', prompt);
-        }
-
-        // Note: --verbose is already added by default for stream-json
-        // This is kept for backward compatibility if we change output format
-
-        // Security: Validate fallback model name against whitelist
-        if (config.fallbackModel) {
-          const modelResult = validateModel(String(config.fallbackModel));
-          if (modelResult.ok === false) {
-            throw new Error(modelResult.error.message);
-          }
-          args.push('--fallback-model', modelResult.value);
-        }
-
-        // Note: permission_mode is deprecated in favor of --dangerously-skip-permissions
-        // which provides full unattended execution for headless mode
-      }
+      const args = this.buildArguments(prompt, options);
 
       const proc = spawn('claude', args, {
         cwd: options.cwd,
@@ -246,13 +294,6 @@ export class ClaudeCodeAgent implements CodingAgent {
       let lastResult = '';
 
       // Buffering system for ordered tool display
-      interface ToolInfo {
-        name: string;
-        displayText: string;
-        result?: string;
-        isError?: boolean;
-        completed: boolean;
-      }
       const toolQueue: string[] = []; // Order of tool IDs
       const toolBuffer = new Map<string, ToolInfo>(); // tool_id → tool info
 
@@ -321,22 +362,7 @@ export class ClaudeCodeAgent implements CodingAgent {
 
                   if (toolId) {
                     // Build display text for this tool
-                    let displayText = '';
-                    if (toolName === 'Read' && input.file_path) {
-                      displayText = chalk.bold('Read') + ` ${input.file_path}\n`;
-                    } else if (toolName === 'Write' && input.file_path) {
-                      displayText = chalk.bold('Write') + ` ${input.file_path}\n`;
-                    } else if (toolName === 'Edit' && input.file_path) {
-                      displayText = chalk.bold('Edit') + ` ${input.file_path}\n`;
-                    } else if (toolName === 'Bash' && input.command) {
-                      displayText = chalk.bold('Bash') + ` ${input.command}\n`;
-                    } else if (toolName === 'Glob' && input.pattern) {
-                      displayText = chalk.bold('Glob') + ` ${input.pattern}\n`;
-                    } else if (toolName === 'Grep' && input.pattern) {
-                      displayText = chalk.bold('Grep') + ` ${input.pattern}\n`;
-                    } else {
-                      displayText = chalk.bold(toolName) + '\n';
-                    }
+                    const displayText = this.buildToolDisplayText(toolName, input);
 
                     // Add to buffer and queue
                     toolQueue.push(toolId);
@@ -363,14 +389,8 @@ export class ClaudeCodeAgent implements CodingAgent {
                     const toolInfo = toolBuffer.get(toolUseId)!;
 
                     if (toolResult && typeof toolResult === 'string' && toolResult.trim()) {
-                      // Strip line numbers and format first 5 lines of tool output
-                      const cleanedResult = stripLineNumbers(toolResult);
-                      const lines = cleanedResult.split('\n');
-                      const firstFiveLines = lines.slice(0, 5).join('\n');
-                      const truncated = lines.length > 5
-                        ? firstFiveLines + '\n...'
-                        : firstFiveLines;
-                      toolInfo.result = truncated;
+                      // Format and truncate tool output
+                      toolInfo.result = this.formatToolResult(toolResult);
                       toolInfo.isError = isError;
                     }
 
