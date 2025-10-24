@@ -143,3 +143,6 @@ export interface ChangeDetectionResult {
 
 // Export OutputWriter types
 export * from './output-writer';
+
+// Export Zod schemas for validation
+export * from './schemas';
