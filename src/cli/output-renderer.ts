@@ -153,12 +153,12 @@ export class OutputRenderer {
 
     if (error) {
       this.indent();
-      if ('code' in error && 'details' in error) {
+      if ('code' in error && 'context' in error) {
         // DotAiError with code
         console.log(chalk.gray(this.getIndent() + `Error: ${error.message}`));
         console.log(chalk.gray(this.getIndent() + `Code: ${error.code}`));
-        if (error.details && Object.keys(error.details).length > 0) {
-          console.log(chalk.gray(this.getIndent() + `Details: ${JSON.stringify(error.details, null, 2)}`));
+        if (error.context && Object.keys(error.context).length > 0) {
+          console.log(chalk.gray(this.getIndent() + `Context: ${JSON.stringify(error.context, null, 2)}`));
         }
       } else {
         // Regular Error
@@ -276,7 +276,12 @@ export class OutputRenderer {
     this.indent();
     console.log(chalk.white(this.getIndent() + `Total iterations: ${metrics.totalIterations}`));
     console.log(chalk.white(this.getIndent() + `Total time: ${(metrics.totalTimeMs / 1000).toFixed(1)}s`));
-    console.log(chalk.white(this.getIndent() + `Average: ${(metrics.totalTimeMs / metrics.totalIterations / 1000).toFixed(1)}s per iteration`));
+
+    // Guard against division by zero
+    if (metrics.totalIterations > 0) {
+      const avgTime = (metrics.totalTimeMs / metrics.totalIterations / 1000).toFixed(1);
+      console.log(chalk.white(this.getIndent() + `Average: ${avgTime}s per iteration`));
+    }
 
     const convergenceMessages = {
       natural: chalk.green(this.getIndent() + 'Convergence: Natural (spec stabilized)'),

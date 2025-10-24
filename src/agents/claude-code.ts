@@ -1,8 +1,10 @@
 import { spawn } from 'child_process';
 import chalk from 'chalk';
+import ora from 'ora';
 import { CodingAgent, GenerationResult, InvokeOptions } from '../types';
 import { Result, Ok, Err } from '../utils/result';
 import { ValidationError } from '../types/errors';
+import { stripLineNumbers, cleanErrorMessage } from '../utils/output-formatting';
 
 /**
  * Security: Whitelisted allowed models to prevent command injection
@@ -17,11 +19,6 @@ const ALLOWED_MODELS = [
   'opus',
   'haiku',
 ];
-
-/**
- * Security: Whitelisted permission modes
- */
-const ALLOWED_PERMISSION_MODES = ['acceptEdits', 'bypassPermissions', 'default', 'plan'];
 
 /**
  * Security: Validate tool name format to prevent injection
@@ -75,22 +72,6 @@ function validateModel(model: string): Result<string, ValidationError> {
     );
   }
   return new Ok(model);
-}
-
-/**
- * Security: Validate permission mode
- */
-function validatePermissionMode(mode: string): Result<string, ValidationError> {
-  if (!ALLOWED_PERMISSION_MODES.includes(mode)) {
-    return new Err(
-      new ValidationError(
-        `Invalid permission_mode: "${mode}". Allowed modes: ${ALLOWED_PERMISSION_MODES.join(', ')}`,
-        'INVALID_PERMISSION_MODE',
-        { mode, allowedModes: ALLOWED_PERMISSION_MODES }
-      )
-    );
-  }
-  return new Ok(mode);
 }
 
 /**
@@ -263,7 +244,54 @@ export class ClaudeCodeAgent implements CodingAgent {
       let stdout = '';
       let stderr = '';
       let lastResult = '';
-      const toolMap = new Map<string, string>(); // Map tool_use_id to tool name
+
+      // Buffering system for ordered tool display
+      interface ToolInfo {
+        name: string;
+        displayText: string;
+        result?: string;
+        isError?: boolean;
+        completed: boolean;
+      }
+      const toolQueue: string[] = []; // Order of tool IDs
+      const toolBuffer = new Map<string, ToolInfo>(); // tool_id → tool info
+
+      // Start spinner at bottom of output
+      const spinner = ora({
+        text: '',
+        color: 'cyan',
+        indent: 0,
+      }).start();
+
+      // Display next completed tool in queue
+      const displayNextTool = () => {
+        while (toolQueue.length > 0) {
+          const nextToolId = toolQueue[0];
+          const toolInfo = toolBuffer.get(nextToolId);
+
+          if (toolInfo && toolInfo.completed) {
+            // Display tool and result together
+            process.stdout.write(toolInfo.displayText);
+            if (toolInfo.result) {
+              if (toolInfo.isError) {
+                const cleanError = cleanErrorMessage(toolInfo.result);
+                process.stdout.write(chalk.red(`✗ ${cleanError}`) + '\n\n');
+              } else {
+                process.stdout.write(chalk.gray(`↳ `) + chalk.gray(toolInfo.result) + '\n\n');
+              }
+            } else {
+              process.stdout.write('\n');
+            }
+
+            // Remove from queue and buffer
+            toolQueue.shift();
+            toolBuffer.delete(nextToolId);
+          } else {
+            // Next tool not ready yet, stop
+            break;
+          }
+        }
+      };
 
       // Stream stdout to console while capturing
       proc.stdout.on('data', (data) => {
@@ -283,85 +311,73 @@ export class ClaudeCodeAgent implements CodingAgent {
               // Assistant message chunk - display readable content
               for (const content of json.message.content) {
                 if (content.type === 'text' && content.text) {
-                  // Display text content without indentation
+                  // Display text content immediately (not tool-related)
                   process.stdout.write(`${content.text}\n\n`);
                 } else if (content.type === 'tool_use') {
-                  // Show tool name in bold with details
+                  // Buffer tool use - don't display yet
                   const toolName = content.name;
                   const toolId = content.id;
                   const input = content.input || {};
 
-                  // Track tool ID for matching with results
                   if (toolId) {
-                    toolMap.set(toolId, toolName);
-                  }
-
-                  if (toolName === 'Read' && input.file_path) {
-                    process.stdout.write(chalk.bold('Read') + ` ${input.file_path}\n`);
-                  } else if (toolName === 'Write' && input.file_path) {
-                    process.stdout.write(chalk.bold('Write') + ` ${input.file_path}\n`);
-                  } else if (toolName === 'Edit' && input.file_path) {
-                    process.stdout.write(chalk.bold('Edit') + ` ${input.file_path}\n`);
-                  } else if (toolName === 'Bash' && input.command) {
-                    process.stdout.write(chalk.bold('Bash') + ` ${input.command}\n`);
-                  } else if (toolName === 'Glob' && input.pattern) {
-                    process.stdout.write(chalk.bold('Glob') + ` ${input.pattern}\n`);
-                  } else if (toolName === 'Grep' && input.pattern) {
-                    process.stdout.write(chalk.bold('Grep') + ` ${input.pattern}\n`);
-                  } else {
-                    // Other tools - just show name
-                    process.stdout.write(chalk.bold(toolName) + '\n');
-                  }
-                } else if (content.type === 'tool_result') {
-                  // Show tool results with label from tool map
-                  const toolResult = content.content;
-                  const toolUseId = content.tool_use_id;
-                  const isError = content.is_error;
-
-                  if (toolResult && typeof toolResult === 'string' && toolResult.trim()) {
-                    // Show first 5 lines of tool output
-                    const lines = toolResult.split('\n');
-                    const firstFiveLines = lines.slice(0, 5).join('\n');
-                    const truncated = lines.length > 5
-                      ? firstFiveLines + '\n...'
-                      : firstFiveLines;
-
-                    // Look up tool name from map
-                    const toolName = toolUseId ? toolMap.get(toolUseId) : null;
-
-                    if (isError) {
-                      // Show errors in red
-                      if (toolName) {
-                        process.stdout.write(chalk.red(`✗ ${toolName} error: `) + chalk.red(truncated) + '\n\n');
-                      } else {
-                        process.stdout.write(chalk.red('✗ Error: ') + chalk.red(truncated) + '\n\n');
-                      }
+                    // Build display text for this tool
+                    let displayText = '';
+                    if (toolName === 'Read' && input.file_path) {
+                      displayText = chalk.bold('Read') + ` ${input.file_path}\n`;
+                    } else if (toolName === 'Write' && input.file_path) {
+                      displayText = chalk.bold('Write') + ` ${input.file_path}\n`;
+                    } else if (toolName === 'Edit' && input.file_path) {
+                      displayText = chalk.bold('Edit') + ` ${input.file_path}\n`;
+                    } else if (toolName === 'Bash' && input.command) {
+                      displayText = chalk.bold('Bash') + ` ${input.command}\n`;
+                    } else if (toolName === 'Glob' && input.pattern) {
+                      displayText = chalk.bold('Glob') + ` ${input.pattern}\n`;
+                    } else if (toolName === 'Grep' && input.pattern) {
+                      displayText = chalk.bold('Grep') + ` ${input.pattern}\n`;
                     } else {
-                      // Show success results in gray
-                      if (toolName) {
-                        process.stdout.write(chalk.gray(`↳ ${toolName}: `) + chalk.gray(truncated) + '\n\n');
-                      } else {
-                        process.stdout.write(chalk.gray(truncated) + '\n\n');
-                      }
+                      displayText = chalk.bold(toolName) + '\n';
                     }
+
+                    // Add to buffer and queue
+                    toolQueue.push(toolId);
+                    toolBuffer.set(toolId, {
+                      name: toolName,
+                      displayText,
+                      completed: false,
+                    });
                   }
                 }
               }
             } else if (json.type === 'user' && json.message?.content) {
-              // User messages (if any)
+              // User messages containing tool results
               for (const content of json.message.content) {
                 if (content.type === 'text' && content.text) {
                   process.stdout.write(chalk.cyan('User: ') + content.text + '\n\n');
                 } else if (content.type === 'tool_result') {
-                  // Tool result from user side
-                  if (content.content) {
-                    const result = String(content.content);
-                    const lines = result.split('\n');
-                    const firstFiveLines = lines.slice(0, 5).join('\n');
-                    const truncated = lines.length > 5
-                      ? firstFiveLines + '\n...'
-                      : firstFiveLines;
-                    process.stdout.write(chalk.gray(truncated) + '\n\n');
+                  // Mark tool as completed with result
+                  const toolResult = content.content;
+                  const toolUseId = content.tool_use_id;
+                  const isError = content.is_error;
+
+                  if (toolUseId && toolBuffer.has(toolUseId)) {
+                    const toolInfo = toolBuffer.get(toolUseId)!;
+
+                    if (toolResult && typeof toolResult === 'string' && toolResult.trim()) {
+                      // Strip line numbers and format first 5 lines of tool output
+                      const cleanedResult = stripLineNumbers(toolResult);
+                      const lines = cleanedResult.split('\n');
+                      const firstFiveLines = lines.slice(0, 5).join('\n');
+                      const truncated = lines.length > 5
+                        ? firstFiveLines + '\n...'
+                        : firstFiveLines;
+                      toolInfo.result = truncated;
+                      toolInfo.isError = isError;
+                    }
+
+                    toolInfo.completed = true;
+
+                    // Try to display completed tools in order
+                    displayNextTool();
                   }
                 }
               }
@@ -387,6 +403,7 @@ export class ClaudeCodeAgent implements CodingAgent {
       });
 
       proc.on('close', (code) => {
+        spinner.stop();
         if (code === 0) {
           resolve(stdout);
         } else {
@@ -395,6 +412,7 @@ export class ClaudeCodeAgent implements CodingAgent {
       });
 
       proc.on('error', (error) => {
+        spinner.stop();
         reject(new Error(`Failed to spawn claude: ${error.message}`));
       });
     });
