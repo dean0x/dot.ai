@@ -134,10 +134,15 @@ export class StateService {
 
     const state = validateResult.value;
 
-    // Check version compatibility (warn but don't fail)
-    if (!isVersionCompatible(state.version)) {
-      // Note: In production, you might want to handle version migration here
-      // For now, we just continue with potentially incompatible state
+    // Check version compatibility and fail fast if incompatible
+    if (!isVersionCompatible(state.version, STATE_VERSION)) {
+      return new Err(
+        new ValidationError(
+          `State version ${state.version} is incompatible with expected version ${STATE_VERSION}. Please run 'dot init' to reset state or implement migration.`,
+          'INVALID_CONFIG',
+          { stateVersion: state.version, expectedVersion: STATE_VERSION }
+        )
+      );
     }
 
     return new Ok(state);
