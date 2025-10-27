@@ -3,40 +3,39 @@
  */
 
 /**
- * Frontmatter configuration in .ai files
- */
-export interface AiFileFrontmatter {
-  /** Coding agent to use (claude-code, cursor, aider, etc.) */
-  agent: string;
-
-  /** Agent-specific configuration */
-  agent_config?: Record<string, unknown>;
-
-  /** List of generated artifact files */
-  artifacts: string[];
-
-  /** Whether to run recursively after changes are detected */
-  recursive?: boolean;
-
-  /** Maximum recursion depth (default: 10, use "∞" for infinite) */
-  max_recursion_depth?: number | "∞";
-}
-
-/**
  * Parsed .ai file structure
+ * .ai files are now plain markdown without frontmatter
  */
 export interface AiFile {
   /** Absolute path to the .ai file */
   path: string;
-
-  /** Parsed frontmatter */
-  frontmatter: AiFileFrontmatter;
 
   /** Markdown content (the specification) */
   content: string;
 
   /** Content hash for change detection */
   hash: string;
+}
+
+/**
+ * CLI options for generation
+ * These replace the old frontmatter configuration
+ */
+export interface GenOptions {
+  /** Coding agent to use (default: claude-code) */
+  agent: string;
+
+  /** Agent-specific configuration */
+  agentConfig?: Record<string, unknown>;
+
+  /** Whether to run recursively after changes are detected (default: true) */
+  recursive: boolean;
+
+  /** Maximum recursion depth (default: 10, use "∞" for infinite) */
+  maxRecursionDepth: number | "∞";
+
+  /** Additional flags to forward to the coding agent */
+  forwardedFlags?: string[];
 }
 
 /**
@@ -107,6 +106,9 @@ export interface InvokeOptions {
 
   /** List of existing artifact paths (for context) */
   existingArtifacts?: string[];
+
+  /** Additional CLI flags to forward to the agent */
+  forwardedFlags?: string[];
 }
 
 /**

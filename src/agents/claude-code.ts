@@ -277,6 +277,13 @@ export class ClaudeCodeAgent implements CodingAgent {
       }
     }
 
+    // Forward unknown flags to Claude Code CLI
+    // These flags were passed to dot.ai but not recognized by our CLI parser
+    // This allows future-proofing as Claude Code adds new flags
+    if (options.forwardedFlags && options.forwardedFlags.length > 0) {
+      args.push(...options.forwardedFlags);
+    }
+
     return args;
   }
 

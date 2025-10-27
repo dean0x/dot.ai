@@ -1,20 +1,21 @@
 /**
  * Parser service with I/O operations
- * 
+ *
  * Uses dependency injection for FileSystem and Hasher.
  * All operations return Result types.
+ *
+ * NOTE: .ai files are now plain markdown without frontmatter.
+ * Configuration is passed via CLI flags instead.
  */
 
 import * as path from 'path';
 import { Result, Ok, Err, isErr } from '../utils/result';
 import { FileSystem, Hasher } from '../infrastructure/interfaces';
-import { AiFile, AiFileFrontmatter } from '../types';
+import { AiFile } from '../types';
 import { FileSystemError, DotAiError } from '../types/errors';
 import {
   validatePathWithinBase,
   parseFileContent,
-  validateFrontmatter,
-  serializeFileContent,
   isAiFile,
   shouldSkipDirectory,
 } from './parser-core';
@@ -35,7 +36,7 @@ export class ParserService {
   ) {}
 
   /**
-   * Parse a .ai file and extract frontmatter + content
+   * Parse a .ai file (plain markdown)
    */
   async parseAiFile(filePath: string): Promise<Result<AiFile, DotAiError>> {
     // Validate path (pure)
@@ -52,80 +53,17 @@ export class ParserService {
     }
     const rawContent = readResult.value;
 
-    // Parse content (pure)
-    const parseResult = parseFileContent(rawContent);
-    if (isErr(parseResult)) {
-      return parseResult;
-    }
-    const { frontmatter: rawFrontmatter, content } = parseResult.value;
+    // Parse content (pure) - just trim whitespace
+    const content = parseFileContent(rawContent);
 
-    // Validate frontmatter (pure)
-    const frontmatterResult = validateFrontmatter(rawFrontmatter);
-    if (isErr(frontmatterResult)) {
-      return frontmatterResult;
-    }
-    const frontmatter = frontmatterResult.value;
-
-    // Calculate content hash (pure, via hasher)
-    // IMPORTANT: Hash only the content portion (not frontmatter)
+    // Calculate content hash
     const hash = this.hasher.hash(content);
 
     return new Ok({
       path: absolutePath,
-      frontmatter,
       content,
       hash,
     });
-  }
-
-  /**
-   * Update the artifacts list in a .ai file's frontmatter
-   */
-  async updateArtifacts(
-    filePath: string,
-    artifacts: string[]
-  ): Promise<Result<void, DotAiError>> {
-    // Validate path (pure)
-    const pathResult = validatePathWithinBase(filePath);
-    if (isErr(pathResult)) {
-      return pathResult;
-    }
-    const validatedPath = pathResult.value;
-
-    // Read file (I/O)
-    const readResult = await this.fs.readFile(validatedPath, 'utf-8');
-    if (isErr(readResult)) {
-      return readResult;
-    }
-    const rawContent = readResult.value;
-
-    // Parse content (pure)
-    const parseResult = parseFileContent(rawContent);
-    if (isErr(parseResult)) {
-      return parseResult;
-    }
-    const { frontmatter: rawFrontmatter, content } = parseResult.value;
-
-    // Validate frontmatter (pure)
-    const frontmatterResult = validateFrontmatter(rawFrontmatter);
-    if (isErr(frontmatterResult)) {
-      return frontmatterResult;
-    }
-    const frontmatter = frontmatterResult.value;
-
-    // Update artifacts (pure)
-    // Filter out undefined values for YAML serialization
-    const updatedFrontmatter: AiFileFrontmatter = {
-      agent: frontmatter.agent,
-      artifacts,
-      ...(frontmatter.agent_config !== undefined && { agent_config: frontmatter.agent_config }),
-    };
-
-    // Serialize (pure)
-    const updated = serializeFileContent(updatedFrontmatter, content);
-
-    // Write file (I/O)
-    return await this.fs.writeFile(validatedPath, updated, 'utf-8');
   }
 
   /**

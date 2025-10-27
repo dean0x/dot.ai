@@ -17,13 +17,19 @@ import { OutputRenderer } from '../output-renderer';
 /**
  * Command options for the gen command
  */
-interface GenOptions {
+interface GenCommandOptions {
   /** Force regenerate all .ai files regardless of changes */
   force?: boolean;
   /** Enable parallel processing for multiple files (opt-in for performance) */
   parallel?: boolean;
-  /** Max number of concurrent files when using --parallel (default: 5, range: 1-50) */
+  /** Max number of concurrent files when using --parallel (default: 5, range: 1-20) */
   concurrency?: number;
+  /** Coding agent to use (default: claude-code) */
+  agent?: string;
+  /** Enable recursive processing when agent updates spec (default: true) */
+  recursive?: boolean;
+  /** Maximum recursion depth (default: 10, use "∞" for infinite) */
+  maxRecursionDepth?: number | "∞";
 }
 
 // Maximum recursion depth to prevent infinite loops
@@ -144,7 +150,10 @@ async function processSingleIteration(
   parserService: ParserService,
   cwd: string,
   iteration: number,
-  renderer: OutputRenderer
+  renderer: OutputRenderer,
+  agentName: string,
+  agentConfig?: Record<string, unknown>,
+  forwardedFlags?: string[]
 ): Promise<SingleIterationResult> {
   // Get previous state
   const previousState = getFileState(state, aiFile.path);
@@ -158,7 +167,7 @@ async function processSingleIteration(
   const prompt = promptResult.value;
 
   // Get agent
-  const agentResult = getAgent(aiFile.frontmatter.agent);
+  const agentResult = getAgent(agentName);
   if (isErr(agentResult)) {
     renderer.error(`Failed to get agent: ${agentResult.error.message}`, agentResult.error);
     return { success: false, updatedState: state, updatedAiFile: null, specChanged: false };
@@ -172,8 +181,9 @@ async function processSingleIteration(
   // Invoke agent (no spinner, agent outputs tool usage directly)
   const result = await agent.invoke(prompt, {
     cwd,
-    agentConfig: aiFile.frontmatter.agent_config,
+    agentConfig,
     existingArtifacts: previousState?.artifacts,
+    forwardedFlags,
   });
 
   if (!result.success) {
@@ -183,9 +193,10 @@ async function processSingleIteration(
     return { success: false, updatedState: state, updatedAiFile: null, specChanged: false };
   }
 
-  // Combine detected artifacts with existing frontmatter artifacts
+  // Combine detected artifacts with previous artifacts from state
+  const previousArtifacts = previousState?.artifacts || [];
   let allArtifacts = [
-    ...new Set([...aiFile.frontmatter.artifacts, ...result.artifacts]),
+    ...new Set([...previousArtifacts, ...result.artifacts]),
   ];
 
   // Fallback: Scan file system for new files if no artifacts detected
@@ -206,14 +217,9 @@ async function processSingleIteration(
     }
   }
 
-  // Update artifacts in .ai file frontmatter
+  // Display tracked artifacts
   if (allArtifacts.length > 0) {
-    const updateResult = await parserService.updateArtifacts(aiFile.path, allArtifacts);
-    if (isErr(updateResult)) {
-      renderer.warning(`Could not update artifacts: ${updateResult.error.message}`);
-    } else {
-      renderer.artifactsTracked(allArtifacts.length, allArtifacts);
-    }
+    renderer.artifactsTracked(allArtifacts.length, allArtifacts);
   } else {
     renderer.warning('No artifacts detected');
   }
@@ -254,7 +260,12 @@ async function processSingleFile(
   cwd: string,
   renderer: OutputRenderer,
   fileNum: number,
-  totalFiles: number
+  totalFiles: number,
+  agentName: string,
+  recursive: boolean,
+  maxRecursionDepth: number | "∞",
+  agentConfig?: Record<string, unknown>,
+  forwardedFlags?: string[]
 ): Promise<{
   success: boolean;
   filePath: string;
@@ -273,7 +284,12 @@ async function processSingleFile(
       state,
       parserService,
       cwd,
-      renderer
+      renderer,
+      agentName,
+      recursive,
+      maxRecursionDepth,
+      agentConfig,
+      forwardedFlags
     );
 
     renderer.unindent();
@@ -284,7 +300,7 @@ async function processSingleFile(
 
       // Display metrics summary
       const metrics = processResult.metrics;
-      if (metrics.totalIterations > 1 || aiFile.frontmatter.recursive) {
+      if (metrics.totalIterations > 1 || recursive) {
         renderer.recursionSummary(metrics);
       }
 
@@ -326,7 +342,12 @@ async function processFileRecursively(
   state: DotAiState,
   parserService: ParserService,
   cwd: string,
-  renderer: OutputRenderer
+  renderer: OutputRenderer,
+  agentName: string,
+  recursive: boolean,
+  maxRecursionDepth: number | "∞",
+  agentConfig?: Record<string, unknown>,
+  forwardedFlags?: string[]
 ): Promise<{
   success: boolean;
   updatedState: DotAiState;
@@ -353,7 +374,10 @@ async function processFileRecursively(
       parserService,
       cwd,
       iteration,
-      renderer
+      renderer,
+      agentName,
+      agentConfig,
+      forwardedFlags
     );
 
     // Track iteration time
@@ -373,8 +397,8 @@ async function processFileRecursively(
       break;
     }
 
-    // Check if this is a non-recursive file
-    if (!currentAiFile.frontmatter.recursive) {
+    // Check if recursive mode is disabled
+    if (!recursive) {
       convergenceReason = 'none';
       break;
     }
@@ -389,11 +413,10 @@ async function processFileRecursively(
     finalSpecChanged = true;
 
     // Spec changed - check if we can continue
-    const maxDepth = currentAiFile.frontmatter.max_recursion_depth ?? MAX_RECURSION_DEPTH;
-    const isInfinite = maxDepth === "∞";
+    const isInfinite = maxRecursionDepth === "∞";
 
-    if (!isInfinite && typeof maxDepth === 'number' && iteration >= maxDepth - 1) {
-      renderer.warning(`Maximum recursion depth (${maxDepth}) reached`);
+    if (!isInfinite && typeof maxRecursionDepth === 'number' && iteration >= maxRecursionDepth - 1) {
+      renderer.warning(`Maximum recursion depth (${maxRecursionDepth}) reached`);
       renderer.warning('Agent updated spec but cannot continue');
       convergenceReason = 'max_depth';
       break;
@@ -427,9 +450,76 @@ async function processFileRecursively(
   };
 }
 
-export async function genCommand(targetPath?: string, options: GenOptions = {}): Promise<void> {
+export async function genCommand(targetPath?: string, cmdOptions: GenCommandOptions = {}, cmd?: any): Promise<void> {
   // Create output renderer
   const renderer = new OutputRenderer();
+
+  // Extract known flags
+  const knownFlags = new Set([
+    'force', 'f',
+    'parallel', 'p',
+    'concurrency', 'c',
+    'agent', 'a',
+    'recursive', 'r',
+    'no-recursive',
+    'maxRecursionDepth', 'max-recursion-depth', 'm'
+  ]);
+
+  // Extract unknown flags to forward to the coding agent
+  const forwardedFlags: string[] = [];
+  if (cmd?.parent?.rawArgs) {
+    const args = cmd.parent.rawArgs.slice(2); // Skip 'node' and script name
+    let skipNext = false;
+
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+
+      if (skipNext) {
+        skipNext = false;
+        continue;
+      }
+
+      // Skip command name and known positional argument
+      if (arg === 'gen' || (!arg.startsWith('-') && i === args.indexOf('gen') + 1)) {
+        continue;
+      }
+
+      // Check if it's a flag
+      if (arg.startsWith('-')) {
+        const flagName = arg.replace(/^-+/, '').split('=')[0];
+
+        if (!knownFlags.has(flagName)) {
+          // This is an unknown flag - forward it
+          if (arg.includes('=')) {
+            // Flag with value: --flag=value
+            forwardedFlags.push(arg);
+          } else {
+            // Flag might have separate value
+            forwardedFlags.push(arg);
+            // Check if next arg is the value (not a flag)
+            if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+              forwardedFlags.push(args[i + 1]);
+              skipNext = true;
+            }
+          }
+        } else if (knownFlags.has(flagName) && !arg.includes('=') && i + 1 < args.length && !args[i + 1].startsWith('-')) {
+          // Known flag with separate value - skip the value
+          skipNext = true;
+        }
+      }
+    }
+  }
+
+  // Build options with defaults
+  const options = {
+    force: cmdOptions.force || false,
+    parallel: cmdOptions.parallel || false,
+    concurrency: cmdOptions.concurrency,
+    agent: cmdOptions.agent || 'claude-code',
+    recursive: cmdOptions.recursive !== false, // Default to true
+    maxRecursionDepth: cmdOptions.maxRecursionDepth || MAX_RECURSION_DEPTH,
+    forwardedFlags
+  };
 
   // Handle Ctrl+C gracefully
   let interrupted = false;
@@ -511,14 +601,10 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
     // Get files to process
     const filesToProcess = getFilesToProcess(changes);
 
-    // Check if any files have infinite recursion enabled
-    const infiniteRecursionFiles = filesToProcess.filter(
-      file => file.frontmatter.recursive && file.frontmatter.max_recursion_depth === "∞"
-    );
-
-    if (infiniteRecursionFiles.length > 0) {
+    // Check if infinite recursion is enabled via CLI flags
+    if (options.recursive && options.maxRecursionDepth === "∞" && filesToProcess.length > 0) {
       renderer.infiniteRecursionWarning(
-        infiniteRecursionFiles.map(f => ({ path: f.path, name: path.basename(f.path) }))
+        filesToProcess.map(f => ({ path: f.path, name: path.basename(f.path) }))
       );
 
       const confirmed = await promptUser(chalk.white('Continue? (y/n): '));
@@ -581,7 +667,12 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
             aiFileDir,
             renderer,
             i + 1,
-            filesToProcess.length
+            filesToProcess.length,
+            options.agent,
+            options.recursive,
+            options.maxRecursionDepth,
+            undefined, // agentConfig - not supported yet
+            options.forwardedFlags
           );
         })
       );
@@ -646,7 +737,12 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
           aiFileDir,
           renderer,
           i + 1,
-          filesToProcess.length
+          filesToProcess.length,
+          options.agent,
+          options.recursive,
+          options.maxRecursionDepth,
+          undefined, // agentConfig - not supported yet
+          options.forwardedFlags
         );
 
         // Update state with result (sequential mode updates immediately)
