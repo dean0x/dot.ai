@@ -4,13 +4,14 @@ AI-powered code generation from `.ai` specification files.
 
 ## Overview
 
-`dot.ai` enables you to create **reactive specifications** that generate code artifacts. Write your requirements in `.ai` files (Markdown with YAML frontmatter), and let AI coding agents implement them.
+`dot.ai` enables you to create **reactive specifications** that generate code artifacts. Write your requirements in `.ai` files (plain Markdown), configure behavior via CLI flags, and let AI coding agents implement them.
 
 ### Key Concepts
 
-- **`.ai` files**: Living specification documents (Markdown + YAML frontmatter)
+- **`.ai` files**: Living specification documents (plain Markdown)
 - **Artifacts**: Generated code files tracked and managed by dot.ai
 - **Agents**: Pluggable coding agents (claude-code, cursor, aider, etc.)
+- **CLI configuration**: Agent selection, recursion, and options via command-line flags
 - **State tracking**: Hash-based change detection for efficient regeneration
 
 ## Installation
@@ -68,11 +69,6 @@ This creates:
 Create `Button.ai`:
 
 ```markdown
----
-agent: claude-code
-artifacts: []
----
-
 # Button Component Specification
 
 Create a reusable React Button component with TypeScript.
@@ -92,23 +88,15 @@ dot gen
 
 This will:
 1. Detect changed `.ai` files
-2. Invoke the specified agent (claude-code)
+2. Invoke the coding agent (default: claude-code)
 3. Generate artifacts
-4. Update the `.ai` file's `artifacts:` list
-5. Track state for future incremental updates
+4. Track artifacts and state for future incremental updates
 
 ### 4. Make changes
 
 Edit `Button.ai` to add a new requirement:
 
 ```markdown
----
-agent: claude-code
-artifacts:
-  - Button.tsx
-  - Button.test.tsx
----
-
 # Button Component Specification
 
 Create a reusable React Button component with TypeScript.
@@ -135,6 +123,10 @@ Generate code from `.ai` files.
 - `--force, -f`: Force regenerate all .ai files regardless of changes
 - `--parallel, -p`: Enable parallel processing for multiple files (faster but output may interleave)
 - `--concurrency, -c <number>`: Max number of concurrent files when using --parallel (default: 5, range: 1-20)
+- `--agent, -a <name>`: Coding agent to use (default: claude-code)
+- `--recursive, -r`: Enable recursive processing when agent updates spec (default: true)
+- `--no-recursive`: Disable recursive processing
+- `--max-recursion-depth, -m <number>`: Maximum recursion depth (default: 10, use "∞" for infinite)
 
 **Examples:**
 ```bash
@@ -146,6 +138,12 @@ dot gen --force      # Regenerate everything
 dot gen --parallel                    # Process up to 5 files concurrently
 dot gen --parallel --concurrency 10   # Process up to 10 files concurrently
 dot gen ./src --parallel              # Parallel mode for specific directory
+
+# Agent and recursion control
+dot gen --agent cursor                # Use cursor agent instead of claude-code
+dot gen --no-recursive                # Disable recursive processing
+dot gen --max-recursion-depth 20      # Allow up to 20 iterations
+dot gen --max-recursion-depth ∞       # Allow infinite iterations
 ```
 
 **Performance Mode Trade-offs:**
@@ -197,71 +195,68 @@ dot clean
 
 ## `.ai` File Format
 
-`.ai` files use Markdown with YAML frontmatter:
+`.ai` files are plain Markdown - no frontmatter, no special syntax:
 
 ```markdown
----
-agent: claude-code              # Required: coding agent to use
-artifacts: []                    # Auto-tracked: generated files
-agent_config:                    # Optional: agent-specific config
-  model: claude-sonnet-4
-  allowedTools: "Read,Write,Edit"
-recursive: false                 # Optional: enable recursive processing
-max_recursion_depth: 10          # Optional: iteration limit (default: 10, or ∞)
----
-
 # Your Specification Title
 
 Write your specification in Markdown.
 
 The agent will implement this spec and generate artifacts.
+
+## Requirements
+
+- Feature 1
+- Feature 2
+- Feature 3
+
+## Testing
+
+- Unit tests for all features
+- Integration tests
 ```
 
-### Frontmatter Fields
+Configuration is passed via CLI flags:
 
-- **`agent`** (required): Which coding agent to use (`claude-code`, `cursor`, `aider`)
-- **`artifacts`** (auto-tracked): List of generated files - updated automatically
-- **`agent_config`** (optional): Agent-specific configuration
-- **`recursive`** (optional): Enable recursive processing (default: `false`)
-- **`max_recursion_depth`** (optional): Maximum iterations (default: `10`, or `"∞"` for infinite)
+```bash
+# Basic usage (uses defaults)
+dot gen
 
-### Agent Configuration
+# Specify agent
+dot gen --agent claude-code
 
-Each agent supports different configuration options:
+# Control recursion
+dot gen --recursive --max-recursion-depth 20
 
-**claude-code:**
-```yaml
-agent_config:
-  # Model selection
-  model: claude-sonnet-4                    # Model to use (default: from config)
-  fallbackModel: claude-opus-4              # Fallback if primary overloaded
-
-  # Tool permissions
-  allowedTools: "Read,Write,Edit,Bash"      # Comma-separated allowed tools
-  disallowedTools: "WebSearch"              # Comma-separated denied tools
-
-  # Permission handling
-  permission_mode: acceptEdits              # acceptEdits | bypassPermissions | default | plan
-
-  # System prompts
-  appendSystemPrompt: "Follow clean code principles"  # Additional context
-
-  # Debugging
-  verbose: true                             # Enable verbose logging
+# Combine options
+dot gen --agent cursor --no-recursive --force
 ```
 
-All fields are optional. See [Claude Code headless docs](https://docs.claude.com/en/docs/claude-code/headless) for details.
+### Forwarding Flags to Claude Code
+
+Unknown flags are automatically forwarded to the Claude Code CLI, allowing you to use any Claude Code option:
+
+```bash
+# Forward Claude Code flags
+dot gen --model claude-sonnet-4
+dot gen --custom-instructions "Follow clean code principles"
+dot gen --mcp-hub @modelcontextprotocol/server-filesystem
+
+# Combine dot.ai and Claude Code flags
+dot gen --parallel --model claude-opus-4 --custom-instructions "Use TypeScript strict mode"
+```
+
+This provides future-proof compatibility as Claude Code adds new features.
 
 ## How It Works
 
 ### First Generation
 
-1. You create `Component.ai` with `artifacts: []`
+1. You create `Component.ai` with your specification
 2. Run `dot gen`
 3. dot.ai sends the spec to the agent
 4. Agent generates files (e.g., `Component.tsx`, `Component.test.tsx`)
-5. dot.ai updates `artifacts:` list in `Component.ai`
-6. State is saved in `.dotai/state.json`
+5. Artifacts are tracked in `.dotai/state.json`
 
 ### Subsequent Updates
 
@@ -271,7 +266,7 @@ All fields are optional. See [Claude Code headless docs](https://docs.claude.com
 4. dot.ai generates **diff** of spec changes
 5. dot.ai sends diff + existing artifacts to agent
 6. Agent implements changes (preserving manual edits where sensible)
-7. dot.ai updates artifacts list and state
+7. dot.ai updates state with new artifacts
 
 ### Manual Edits to Artifacts
 
@@ -286,7 +281,7 @@ dot.ai supports **agent self-modification** - agents can edit their own `.ai` sp
 
 #### How It Works
 
-When `recursive: true` is set:
+When `--recursive` is enabled (default):
 
 1. Agent generates artifacts based on current spec
 2. Agent **updates the `.ai` spec** with next task/requirements
@@ -294,13 +289,6 @@ When `recursive: true` is set:
 4. Agent controls convergence by **not modifying** the spec when work is complete
 
 ```markdown
----
-agent: claude-code
-artifacts: []
-recursive: true
-max_recursion_depth: 5
----
-
 # Multi-Stage Feature
 
 Build a complete authentication system:
@@ -312,6 +300,11 @@ Build a complete authentication system:
 (Agent will update this spec after each stage to queue the next task)
 ```
 
+Run with:
+```bash
+dot gen --recursive --max-recursion-depth 5
+```
+
 #### Convergence
 
 The agent signals completion by not updating the spec:
@@ -321,18 +314,18 @@ The agent signals completion by not updating the spec:
 
 #### Iteration Limits
 
-```yaml
+```bash
 # Stop after 10 iterations (default)
-recursive: true
-max_recursion_depth: 10
+dot gen --recursive --max-recursion-depth 10
 
 # Stop after 5 iterations
-recursive: true
-max_recursion_depth: 5
+dot gen --recursive --max-recursion-depth 5
 
 # Run until agent decides to stop (∞ symbol)
-recursive: true
-max_recursion_depth: ∞
+dot gen --recursive --max-recursion-depth ∞
+
+# Disable recursion entirely
+dot gen --no-recursive
 ```
 
 **Warning**: Infinite mode (`∞`) requires careful spec design. The agent must have clear completion criteria.
