@@ -30,13 +30,13 @@ program
   .description('Generate code from .ai files (defaults to current directory)')
   .option('-f, --force', 'Force regenerate all .ai files regardless of changes')
   .option('-p, --parallel', 'Enable parallel processing for multiple files (faster but output may interleave)')
-  .option('-c, --concurrency <number>', 'Max number of concurrent files when using --parallel (default: 5, range: 1-50)', (value) => {
+  .option('-c, --concurrency <number>', 'Max number of concurrent files when using --parallel (default: 5, range: 1-20)', (value) => {
     const num = parseInt(value, 10);
     if (isNaN(num)) {
       throw new Error(`--concurrency must be a number, got: ${value}`);
     }
-    if (num < 1 || num > 50) {
-      throw new Error(`--concurrency must be between 1 and 50, got: ${num}`);
+    if (num < 1 || num > 20) {
+      throw new Error(`--concurrency must be between 1 and 20, got: ${num}`);
     }
     return num;
   })

@@ -134,7 +134,7 @@ Generate code from `.ai` files.
 **Options:**
 - `--force, -f`: Force regenerate all .ai files regardless of changes
 - `--parallel, -p`: Enable parallel processing for multiple files (faster but output may interleave)
-- `--concurrency, -c <number>`: Max number of concurrent files when using --parallel (default: 5, range: 1-50)
+- `--concurrency, -c <number>`: Max number of concurrent files when using --parallel (default: 5, range: 1-20)
 
 **Examples:**
 ```bash

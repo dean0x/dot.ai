@@ -17,12 +17,12 @@ describe('gen command', () => {
         .name('test-cli')
         .option('-f, --force', 'Force regenerate all .ai files regardless of changes')
         .option('-p, --parallel', 'Enable parallel processing')
-        .option('-c, --concurrency <number>', 'Max concurrent files (default: 5, range: 1-50)', (value) => {
+        .option('-c, --concurrency <number>', 'Max concurrent files (default: 5, range: 1-20)', (value) => {
           const num = parseInt(value, 10);
           if (isNaN(num)) {
             throw new Error(`--concurrency must be a number, got: ${value}`);
           }
-          if (num < 1 || num > 50) {
+          if (num < 1 || num > 20) {
             throw new Error(`--concurrency must be between 1 and 50, got: ${num}`);
           }
           return num;
@@ -42,10 +42,10 @@ describe('gen command', () => {
       }).toThrow('--concurrency must be between 1 and 50, got: 0');
     });
 
-    it('validates --concurrency rejects value > 50', () => {
+    it('validates --concurrency rejects value > 20', () => {
       expect(() => {
-        program.parse(['node', 'test', '--concurrency', '51'], { from: 'user' });
-      }).toThrow('--concurrency must be between 1 and 50, got: 51');
+        program.parse(['node', 'test', '--concurrency', '21'], { from: 'user' });
+      }).toThrow('--concurrency must be between 1 and 50, got: 21');
     });
 
     it('validates --concurrency accepts valid range (1)', () => {
@@ -54,10 +54,10 @@ describe('gen command', () => {
       expect(opts.concurrency).toBe(1);
     });
 
-    it('validates --concurrency accepts valid range (50)', () => {
-      program.parse(['node', 'test', '--concurrency', '50'], { from: 'user' });
+    it('validates --concurrency accepts valid range (20)', () => {
+      program.parse(['node', 'test', '--concurrency', '20'], { from: 'user' });
       const opts = program.opts();
-      expect(opts.concurrency).toBe(50);
+      expect(opts.concurrency).toBe(20);
     });
 
     it('validates --concurrency accepts valid mid-range value', () => {

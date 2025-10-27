@@ -1,0 +1,145 @@
+---
+agent: claude-code
+artifacts: []
+recursive: true
+max_recursion_depth: 6
+agent_config:
+  permission_mode: acceptEdits
+  appendSystemPrompt: |
+    BUG FIX REFLECTION MODE
+
+    After each fix attempt:
+    1. Verify the bug is actually fixed (run tests/reproduce)
+    2. Check for regression (did fix break anything else?)
+    3. Assess root cause (did you fix symptom or cause?)
+    4. Update "Debug Log" with findings
+    5. If bug persists or new issues found, update "Next Steps"
+    6. If bug fixed AND no regressions, DON'T modify spec (done)
+
+    Be thorough. A "fixed" bug that comes back is worse than unfixed.
+---
+
+# Bug Fix: [BUG DESCRIPTION] - Self-Reflecting
+
+## Bug Report
+
+**Symptom:**
+[What's going wrong? What error/behavior are you seeing?]
+
+**Expected:**
+[What should happen instead?]
+
+**Reproduction:**
+```
+[Steps to reproduce or failing test case]
+```
+
+**Affected files:**
+- [file1.ts]
+- [file2.ts]
+
+## Fix Quality Criteria
+
+### Bug Resolution ✓/✗
+- [ ] Original bug is fixed
+- [ ] Bug can no longer be reproduced
+- [ ] Failing test now passes (or new test added)
+
+### Root Cause ✓/✗
+- [ ] Root cause identified (not just symptom)
+- [ ] Fix addresses root cause
+- [ ] Explanation of why bug occurred
+
+### No Regressions ✓/✗
+- [ ] All existing tests still pass
+- [ ] No new bugs introduced
+- [ ] Related functionality verified
+
+### Robustness ✓/✗
+- [ ] Similar bugs prevented (guards added)
+- [ ] Edge cases handled
+- [ ] Error messages improved
+
+### Code Quality ✓/✗
+- [ ] Fix is clean and maintainable
+- [ ] No hacky workarounds
+- [ ] Comments explain "why" of fix
+
+## Debug Log
+
+### Iteration 1: Initial Analysis
+
+**Hypothesis:**
+[What do you think is causing the bug?]
+
+**Investigation:**
+[What did you check? What did you find?]
+
+**Fix applied:**
+[What changes did you make?]
+
+**Verification:**
+- Reproduction test: ⬜ Pass / ⬜ Fail
+- Unit tests: ⬜ All pass / ⬜ Some fail
+- Manual testing: ⬜ Works / ⬜ Still broken
+
+**Root cause:**
+[Was this the actual root cause or just a symptom?]
+
+**Regressions:**
+[Did this fix break anything else?]
+
+**Quality check:**
+- Bug Resolution: ⬜
+- Root Cause: ⬜
+- No Regressions: ⬜
+- Robustness: ⬜
+- Code Quality: ⬜
+
+## Next Steps
+
+*[Leave empty when bug is fully fixed with no regressions]*
+
+**If bug still present:**
+- [ ] [Next thing to try]
+
+**If regressions found:**
+- [ ] [Fix regression issue]
+
+**If symptom fixed but root cause unclear:**
+- [ ] [Investigate deeper to find root cause]
+
+**If fix is hacky:**
+- [ ] [Refactor to proper solution]
+
+## Convergence
+
+Stop when ALL true:
+1. ✓ Bug cannot be reproduced
+2. ✓ Root cause understood and fixed
+3. ✓ All tests pass (no regressions)
+4. ✓ Similar bugs prevented
+5. ✓ Fix is clean (not a hack)
+
+---
+
+## Example Debug Flow
+
+### Iteration 1: First Attempt
+**Hypothesis:** Null pointer exception in getUserData()
+**Fix:** Added null check
+**Result:** Bug still occurs! ✗
+**Reason:** Null check was in wrong place
+
+### Iteration 2: Deeper Investigation
+**Hypothesis:** Race condition - data accessed before loaded
+**Fix:** Added await for data loading
+**Result:** Bug fixed! ✓ But tests fail ✗
+**Reason:** Fix broke error handling tests
+
+### Iteration 3: Fix Regression
+**Hypothesis:** Error handling path now unreachable
+**Fix:** Refactored error handling to work with async
+**Result:** Bug fixed ✓ + All tests pass ✓
+**Root cause:** Async/await migration was incomplete
+**Quality:** Clean fix, root cause addressed → DONE

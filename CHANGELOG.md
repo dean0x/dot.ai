@@ -11,12 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Parallel Processing Mode**: Optional parallel processing for faster multi-file generation
   - `--parallel, -p` flag: Enable concurrent processing of multiple .ai files
-  - `--concurrency, -c <number>` flag: Control max concurrent files (default: 5, range: 1-50)
+  - `--concurrency, -c <number>` flag: Control max concurrent files (default: 5, range: 1-20)
   - ~5x speedup for projects with many .ai files (e.g., 10 files: 5min → 1min)
   - Sequential mode remains default for clean, readable console output
 - **Input Validation**: CLI flag validation prevents resource exhaustion attacks
   - `--concurrency` validates numeric input and rejects NaN values
-  - Range enforcement (1-50) prevents unbounded process spawning
+  - Range enforcement (1-20) prevents unbounded process spawning
   - Clear error messages for invalid input
 
 ### Changed
@@ -48,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Resource Exhaustion** (CRITICAL): Prevented DoS via unbounded concurrency
   - Previous implementation: `--concurrency` accepted any integer value
   - Impact: User could spawn unlimited processes (e.g., `--concurrency 999999`)
-  - Fix: Strict validation enforcing 1-50 range with clear error messages
+  - Fix: Strict validation enforcing 1-20 range with clear error messages
 - **NaN Injection** (TypeScript Safety): Fixed type soundness violation
   - Previous implementation: `parseInt()` could return NaN, treated as valid number
   - Impact: Type system violated, runtime bugs possible

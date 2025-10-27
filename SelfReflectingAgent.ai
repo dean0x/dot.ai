@@ -1,0 +1,101 @@
+---
+agent: claude-code
+artifacts: []
+recursive: true
+max_recursion_depth: 10
+agent_config:
+  appendSystemPrompt: |
+    You are in SELF-REFLECTION mode. After generating artifacts, you MUST:
+
+    1. ANALYZE your output against the Quality Criteria below
+    2. UPDATE this .ai file's "## Reflection Log" section with findings
+    3. If critical issues found, ADD them to "## Next Iteration" section
+    4. If quality criteria met, DO NOT modify this spec (signals completion)
+
+    Your reflection should be honest and critical. Don't accept mediocre work.
+---
+
+# Self-Reflecting Agent Template
+
+**Purpose**: Create a [DESCRIBE YOUR GOAL] with iterative self-improvement through reflection.
+
+---
+
+## Requirements
+
+Define what you want to build:
+
+- [ ] Requirement 1: [Describe feature/functionality]
+- [ ] Requirement 2: [Describe feature/functionality]
+- [ ] Requirement 3: [Describe feature/functionality]
+
+---
+
+## Quality Criteria
+
+The agent will evaluate its work against these criteria:
+
+### Correctness
+- [ ] Logic is correct and handles edge cases
+- [ ] No obvious bugs or errors
+- [ ] Proper error handling
+
+### Completeness
+- [ ] All requirements are implemented
+- [ ] No missing features or half-implementations
+- [ ] Documentation is complete
+
+### Code Quality
+- [ ] Follows language best practices
+- [ ] Clean, readable code structure
+- [ ] Proper type safety (if applicable)
+- [ ] No code smells or anti-patterns
+
+### Testing
+- [ ] Comprehensive test coverage
+- [ ] Tests actually validate behavior
+- [ ] Edge cases are tested
+
+### Performance
+- [ ] No obvious performance issues
+- [ ] Efficient algorithms chosen
+- [ ] No unnecessary computations
+
+### Security
+- [ ] No security vulnerabilities
+- [ ] Input validation present
+- [ ] Safe handling of sensitive data
+
+---
+
+## Reflection Log
+
+**Instructions for Agent**: After each generation, analyze your work critically and update this section.
+
+### Iteration 1
+*Agent will add findings here*
+
+---
+
+## Next Iteration
+
+**Instructions for Agent**: If quality criteria are not met, specify what needs improvement here. If criteria ARE met, leave this section unchanged.
+
+*Agent will add improvement tasks here if needed*
+
+---
+
+## Convergence Criteria
+
+The agent should stop iterating when:
+- All Quality Criteria checkboxes can be checked ✓
+- No critical or high-priority issues in Reflection Log
+- "Next Iteration" section is empty or only has nice-to-have improvements
+
+---
+
+## Notes
+
+- The agent will update this file after each iteration
+- Iterations continue until quality criteria are met or max_recursion_depth reached
+- Review the Reflection Log to see the agent's self-assessment

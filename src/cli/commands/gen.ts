@@ -29,6 +29,19 @@ interface GenOptions {
 // Maximum recursion depth to prevent infinite loops
 const MAX_RECURSION_DEPTH = 10;
 
+// Default concurrency for parallel processing mode
+const DEFAULT_CONCURRENCY = 5;
+
+/**
+ * Sanitize error messages by removing ANSI escape codes and control characters
+ * Prevents log injection attacks via malicious .ai file content
+ */
+function sanitizeErrorMessage(message: string): string {
+  // Remove ANSI escape codes (\x1b[...m)
+  // Remove other control characters except newline and tab
+  return message.replace(/\x1b\[[0-9;]*m/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+}
+
 /**
  * Prompt user for confirmation
  */
@@ -164,7 +177,9 @@ async function processSingleIteration(
   });
 
   if (!result.success) {
-    renderer.error(`Failed: ${result.error}`);
+    // Security: Sanitize error message from agent output
+    const errorMessage = result.error || 'Unknown error';
+    renderer.error(`Failed: ${sanitizeErrorMessage(errorMessage)}`);
     return { success: false, updatedState: state, updatedAiFile: null, specChanged: false };
   }
 
@@ -288,7 +303,10 @@ async function processSingleFile(
       };
     }
   } catch (error) {
-    renderer.error(`Error: ${error instanceof Error ? error.message : String(error)}`, error as Error);
+    // Type safety: Convert non-Error values to Error objects
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    // Security: Sanitize error message to prevent ANSI injection
+    renderer.error(`Error: ${sanitizeErrorMessage(errorObj.message)}`, errorObj);
     renderer.unindent();
     renderer.newline();
     return {
@@ -385,7 +403,14 @@ async function processFileRecursively(
     renderer.info('Agent updated spec with next task, recursing...');
     renderer.newline();
 
-    currentAiFile = iterResult.updatedAiFile!;
+    // Type safety: Verify updatedAiFile exists before continuing
+    if (!iterResult.updatedAiFile) {
+      renderer.error('Internal error: Agent updated spec but updatedAiFile is missing');
+      convergenceReason = 'error';
+      break;
+    }
+
+    currentAiFile = iterResult.updatedAiFile;
     iteration++;
   }
 
@@ -539,7 +564,7 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
      */
     if (options.parallel && filesToProcess.length > 1) {
       // PARALLEL MODE: Process multiple files concurrently with p-limit
-      const concurrency = options.concurrency || 5;
+      const concurrency = options.concurrency || DEFAULT_CONCURRENCY;
       renderer.debug(`Parallel processing enabled (max ${concurrency} concurrent files)`);
 
       const limit = pLimit(concurrency);
@@ -561,8 +586,9 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
         })
       );
 
-      // Wait for all files to process
-      const results = await Promise.all(processingTasks);
+      // Wait for all files to process (allows partial success)
+      // Use Promise.allSettled instead of Promise.all to prevent one failure from aborting all pending work
+      const settledResults = await Promise.allSettled(processingTasks);
 
       /**
        * STATE MANAGEMENT: Merge file updates atomically
@@ -581,17 +607,27 @@ export async function genCommand(targetPath?: string, options: GenOptions = {}):
        *   Task A: updateFileState(state, 'c.ai', cState)  // Adds c
        *   Task B: updateFileState(state, 'd.ai', dState)  // Adds d
        *   Final state: {files: {a, b, c, d}}  // All preserved ✓
+       *
+       * Note: Using Promise.allSettled allows partial success - if some files fail,
+       * we still process the successful ones instead of aborting the entire batch.
        */
-      for (const result of results) {
-        if (result.success && result.fileState) {
-          // Use updateFileState from state-core to properly merge the update
-          state = updateFileState(state, result.filePath, result.fileState);
-        }
+      for (const settledResult of settledResults) {
+        if (settledResult.status === 'fulfilled') {
+          const result = settledResult.value;
+          if (result.success && result.fileState) {
+            // Use updateFileState from state-core to properly merge the update
+            state = updateFileState(state, result.filePath, result.fileState);
+          }
 
-        if (result.success) {
-          successCount++;
+          if (result.success) {
+            successCount++;
+          } else {
+            failCount++;
+          }
         } else {
+          // Task threw an exception (shouldn't happen with our error handling, but defensive)
           failCount++;
+          renderer.error('Unexpected error in parallel processing', settledResult.reason);
         }
       }
     } else {
