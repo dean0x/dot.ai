@@ -1,0 +1,205 @@
+---
+agent: claude-code
+artifacts: []
+recursive: true
+max_recursion_depth: 8
+agent_config:
+  permission_mode: acceptEdits
+  appendSystemPrompt: |
+    SELF-REFLECTION PROTOCOL:
+
+    After generating code, you MUST critically analyze your work:
+
+    1. Run tests and verify they pass
+    2. Check code against Quality Criteria
+    3. Update "## Reflection Log" with honest assessment
+    4. If issues found, update "## Next Iteration" with specific fixes
+    5. If quality goals met, DO NOT modify this spec (convergence signal)
+
+    Be strict. Don't accept code you wouldn't put in production.
+---
+
+# Validation Library - Self-Reflecting Implementation
+
+Build a TypeScript validation library with self-driven quality assurance through iterative reflection.
+
+---
+
+## Requirements
+
+- [ ] String validators: `isEmail()`, `minLength()`, `maxLength()`, `matches(regex)`
+- [ ] Number validators: `min()`, `max()`, `isInteger()`, `isPositive()`
+- [ ] Composable validation chains: `validate(value).isString().isEmail().required()`
+- [ ] Custom error messages
+- [ ] Type-safe API using TypeScript generics
+- [ ] Comprehensive test suite with 100% coverage
+- [ ] Clear JSDoc documentation
+
+---
+
+## Quality Criteria
+
+The agent evaluates each iteration against these strict criteria:
+
+### Correctness ✓/✗
+- [ ] All validators work correctly with valid input
+- [ ] All validators correctly reject invalid input
+- [ ] Edge cases handled (null, undefined, empty strings, NaN, Infinity)
+- [ ] Error messages are clear and helpful
+- [ ] No runtime errors or crashes
+
+### Completeness ✓/✗
+- [ ] All required validators implemented
+- [ ] Chainable API works as expected
+- [ ] Custom error messages functional
+- [ ] All features from requirements present
+
+### Type Safety ✓/✗
+- [ ] Full TypeScript strict mode compliance
+- [ ] No `any` types (except where truly necessary)
+- [ ] Generics used correctly for type inference
+- [ ] Return types explicit and accurate
+
+### Testing ✓/✗
+- [ ] Every validator has positive test cases
+- [ ] Every validator has negative test cases
+- [ ] Edge cases tested (boundary values, null/undefined)
+- [ ] Chainable API tested
+- [ ] Custom error messages tested
+- [ ] Test coverage ≥ 95%
+
+### Code Quality ✓/✗
+- [ ] Clean, readable code structure
+- [ ] No code duplication
+- [ ] Proper separation of concerns
+- [ ] Follows functional programming principles
+- [ ] JSDoc comments on all public APIs
+
+### Performance ✓/✗
+- [ ] No unnecessary object creation
+- [ ] Efficient validation logic
+- [ ] No performance bottlenecks
+
+---
+
+## Reflection Log
+
+### Iteration 1
+*[Agent will populate after first generation]*
+
+**What worked:**
+-
+
+**What needs improvement:**
+-
+
+**Test results:**
+-
+
+**Quality criteria status:**
+- Correctness: ✗ (not yet evaluated)
+- Completeness: ✗ (not yet evaluated)
+- Type Safety: ✗ (not yet evaluated)
+- Testing: ✗ (not yet evaluated)
+- Code Quality: ✗ (not yet evaluated)
+- Performance: ✗ (not yet evaluated)
+
+---
+
+## Next Iteration
+
+*[Agent will specify improvements needed here. Leave empty when work is complete.]*
+
+### Priority 1 (Critical):
+-
+
+### Priority 2 (Important):
+-
+
+### Priority 3 (Nice-to-have):
+-
+
+---
+
+## Convergence Criteria
+
+Stop iterating when ALL of these are true:
+1. ✓ All Quality Criteria sections show ✓
+2. ✓ All tests passing
+3. ✓ Test coverage ≥ 95%
+4. ✓ No items in "Next Iteration" Priority 1 or 2
+5. ✓ Code review would approve for production
+
+---
+
+## Implementation Guidance
+
+**For the Agent:**
+
+This is a self-reflecting implementation. Your process should be:
+
+1. **Generate** - Implement the requirements
+2. **Test** - Run tests, check coverage
+3. **Reflect** - Critically evaluate against Quality Criteria
+4. **Document** - Update Reflection Log with findings
+5. **Plan** - Add improvements to Next Iteration if needed
+6. **Update Spec** - Modify this .ai file with your reflection
+7. **Decide** - If quality goals met, DON'T modify spec (convergence)
+
+Be your own harshest critic. The goal is production-quality code, not just "working" code.
+
+---
+
+## Example of Good Reflection
+
+```markdown
+### Iteration 3
+
+**What worked:**
+- Chainable API is clean and type-safe
+- All basic validators implemented and tested
+- Test coverage at 87%
+
+**What needs improvement:**
+- Missing edge case tests for null/undefined
+- `matches()` validator doesn't handle invalid regex
+- Error messages could be more descriptive
+- Type inference breaks when chaining after custom validators
+
+**Test results:**
+- 24/24 tests passing
+- Coverage: 87% (target: 95%)
+- Missing coverage in error handling paths
+
+**Quality criteria status:**
+- Correctness: ✗ (edge cases failing)
+- Completeness: ✓ (all features present)
+- Type Safety: ✗ (type inference issue)
+- Testing: ✗ (coverage below target)
+- Code Quality: ✓ (clean structure)
+- Performance: ✓ (efficient)
+
+### Next Iteration
+
+**Priority 1 (Critical):**
+- Fix null/undefined handling in all validators
+- Fix type inference for chained custom validators
+- Add try/catch for invalid regex in matches()
+
+**Priority 2 (Important):**
+- Increase test coverage to ≥95%
+- Improve error message clarity
+- Add edge case tests
+
+**Priority 3 (Nice-to-have):**
+- Add async validator support
+- Add array and object validators
+```
+
+---
+
+## Status
+
+Current iteration: 0
+Target iteration: Self-determined (max 8)
+Status: Ready for first iteration

@@ -1,0 +1,80 @@
+---
+agent: claude-code
+artifacts: []
+recursive: true
+max_recursion_depth: 5
+agent_config:
+  permission_mode: acceptEdits
+  appendSystemPrompt: |
+    SELF-REFLECTION MODE ENABLED
+
+    After each generation:
+    1. Analyze your work critically
+    2. Update "Reflection" section below with findings
+    3. Update "Improvements Needed" if work is incomplete
+    4. If work meets all criteria, DON'T modify spec (this signals completion)
+---
+
+# [YOUR PROJECT NAME] - Self-Reflecting
+
+## Goal
+
+[Describe what you want to build in 1-2 sentences]
+
+## Requirements
+
+- [ ] [Requirement 1]
+- [ ] [Requirement 2]
+- [ ] [Requirement 3]
+
+## Quality Standards
+
+**Must have:**
+- ✓ All requirements implemented
+- ✓ Tests passing
+- ✓ No obvious bugs
+- ✓ Clean, readable code
+
+**Should have:**
+- ✓ Good test coverage (>80%)
+- ✓ Proper error handling
+- ✓ Documentation
+
+## Reflection
+
+### Iteration 1
+
+**Generated artifacts:**
+-
+
+**What's working:**
+-
+
+**Issues found:**
+-
+
+**Quality check:**
+- Requirements: ⬜
+- Tests: ⬜
+- Code quality: ⬜
+- Documentation: ⬜
+
+## Improvements Needed
+
+*[Leave empty when work is complete]*
+
+**Critical:**
+-
+
+**Important:**
+-
+
+**Nice-to-have:**
+-
+
+## Convergence
+
+Stop when:
+- ✓ All requirements checked
+- ✓ All tests passing
+- ✓ No critical/important improvements needed

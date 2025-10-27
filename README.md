@@ -133,13 +133,44 @@ Generate code from `.ai` files.
 
 **Options:**
 - `--force, -f`: Force regenerate all .ai files regardless of changes
+- `--parallel, -p`: Enable parallel processing for multiple files (faster but output may interleave)
+- `--concurrency, -c <number>`: Max number of concurrent files when using --parallel (default: 5, range: 1-20)
 
 **Examples:**
 ```bash
 dot gen              # Process changed .ai files in current directory
 dot gen ./src        # Process changed .ai files in ./src
 dot gen --force      # Regenerate everything
+
+# Parallel processing (5x faster for multiple files)
+dot gen --parallel                    # Process up to 5 files concurrently
+dot gen --parallel --concurrency 10   # Process up to 10 files concurrently
+dot gen ./src --parallel              # Parallel mode for specific directory
 ```
+
+**Performance Mode Trade-offs:**
+
+By default, `dot gen` processes files **sequentially** for clean, readable console output. For faster processing of multiple files, use `--parallel`:
+
+- **Sequential mode** (default):
+  - Clean console output, easy to follow
+  - Processes one file at a time in order
+  - Best for 1-5 files or when debugging
+
+- **Parallel mode** (`--parallel`):
+  - ~5x faster for multiple files (e.g., 10 files: 5min → 1min)
+  - Console output may interleave (tool usage from different files)
+  - Best for 10+ files when speed > readability
+
+**When to use parallel mode:**
+- Large projects with many changed .ai files
+- CI/CD pipelines where speed matters
+- Batch regeneration scenarios
+
+**When to use sequential mode (default):**
+- Debugging issues with .ai files
+- Want to follow agent's thought process
+- Working with 1-5 files where speed difference is minimal
 
 ### `dot status [path]`
 Show which `.ai` files have changed.
