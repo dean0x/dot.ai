@@ -1,9 +1,3 @@
----
-agent: claude-code
-artifacts: []
-recursive: true
-max_recursion_depth: ∞
----
 
 # Infinite Recursion Example
 

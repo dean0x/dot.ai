@@ -66,18 +66,24 @@ The agent signals completion by **NOT modifying the spec**:
 
 ### 1. Recursive Mode Configuration
 
-```yaml
----
-agent: claude-code
-artifacts: []
-recursive: true                    # Enable self-modification
-max_recursion_depth: 10            # Safety limit (or ∞)
-agent_config:
-  permission_mode: acceptEdits     # Auto-accept spec edits
-  appendSystemPrompt: |            # Instructions for reflection
-    [Self-reflection protocol]
----
+Enable recursive processing via CLI flags when running generation:
+
+```bash
+# Basic recursive mode (default, max 10 iterations)
+dot gen --recursive
+
+# Custom iteration limit
+dot gen --recursive --max-recursion-depth 20
+
+# Infinite mode (agent controls when to stop)
+dot gen --recursive --max-recursion-depth ∞
+
+# Forward Claude Code flags for permission and custom instructions
+dot gen --recursive \
+  --custom-instructions "You are in SELF-REFLECTION mode. After generating artifacts, you MUST analyze your output and update this spec with findings."
 ```
+
+Your `.ai` file is now plain Markdown (no frontmatter needed).
 
 ### 2. Quality Criteria
 

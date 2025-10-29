@@ -394,4 +394,286 @@ describe('gen command', () => {
     it.todo('should handle agent invocation errors');
     it.todo('should continue processing other files when one fails');
   });
+
+  describe('Flag Forwarding Extraction', () => {
+    // Helper function that replicates the flag extraction logic from genCommand
+    // This tests the algorithm used in src/cli/commands/gen.ts lines 468-511
+    function extractForwardedFlags(rawArgs: string[]): string[] {
+      const knownFlags = new Set([
+        'force', 'f',
+        'parallel', 'p',
+        'concurrency', 'c',
+        'agent', 'a',
+        'recursive', 'r',
+        'no-recursive',
+        'maxRecursionDepth', 'max-recursion-depth', 'm'
+      ]);
+
+      const forwardedFlags: string[] = [];
+      const args = rawArgs.slice(2); // Skip 'node' and script name
+      let skipNext = false;
+
+      for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+
+        if (skipNext) {
+          skipNext = false;
+          continue;
+        }
+
+        // Skip command name and known positional argument
+        if (arg === 'gen' || (!arg.startsWith('-') && i === args.indexOf('gen') + 1)) {
+          continue;
+        }
+
+        // Check if it's a flag
+        if (arg.startsWith('-')) {
+          const flagName = arg.replace(/^-+/, '').split('=')[0];
+
+          if (!knownFlags.has(flagName)) {
+            // This is an unknown flag - forward it
+            if (arg.includes('=')) {
+              // Flag with value: --flag=value
+              forwardedFlags.push(arg);
+            } else {
+              // Flag might have separate value
+              forwardedFlags.push(arg);
+              // Check if next arg is the value (not a flag)
+              if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+                forwardedFlags.push(args[i + 1]);
+                skipNext = true;
+              }
+            }
+          } else if (knownFlags.has(flagName) && !arg.includes('=') && i + 1 < args.length && !args[i + 1].startsWith('-')) {
+            // Known flag with separate value - skip the value
+            skipNext = true;
+          }
+        }
+      }
+
+      return forwardedFlags;
+    }
+
+    it('should return empty array when rawArgs is empty', () => {
+      const result = extractForwardedFlags(['node', 'dot']);
+      expect(result).toEqual([]);
+    });
+
+    it('should extract unknown flag with = syntax: --flag=value', () => {
+      const result = extractForwardedFlags(['node', 'dot', 'gen', '--unknown-flag=test-value']);
+      expect(result).toEqual(['--unknown-flag=test-value']);
+    });
+
+    it('should extract unknown flag with separate value: --flag value', () => {
+      const result = extractForwardedFlags(['node', 'dot', 'gen', '--unknown-flag', 'test-value']);
+      expect(result).toEqual(['--unknown-flag', 'test-value']);
+    });
+
+    it('should skip known flags and only extract unknown ones', () => {
+      const result = extractForwardedFlags([
+        'node', 'dot', 'gen',
+        '--parallel', // known - skip
+        '--custom-flag', 'value', // unknown - extract
+        '--force' // known - skip
+      ]);
+      expect(result).toEqual(['--custom-flag', 'value']);
+    });
+
+    it('should handle multiple unknown flags', () => {
+      const result = extractForwardedFlags([
+        'node', 'dot', 'gen',
+        '--custom1', 'val1',
+        '--custom2=val2',
+        '--custom3'
+      ]);
+      expect(result).toEqual(['--custom1', 'val1', '--custom2=val2', '--custom3']);
+    });
+
+    it('should handle mixed known and unknown flags', () => {
+      const result = extractForwardedFlags([
+        'node', 'dot', 'gen',
+        '--agent', 'claude-code', // known with value - skip both
+        '--timeout', '30', // unknown with value - extract both
+        '--parallel', // known - skip
+        '--custom' // unknown - extract
+      ]);
+      expect(result).toEqual(['--timeout', '30', '--custom']);
+    });
+
+    it('should handle boolean flags without values', () => {
+      const result = extractForwardedFlags([
+        'node', 'dot', 'gen',
+        '--verbose', // unknown boolean flag
+        '--debug' // unknown boolean flag
+      ]);
+      expect(result).toEqual(['--verbose', '--debug']);
+    });
+
+    it('should handle flags with special characters in values (via = syntax)', () => {
+      const result = extractForwardedFlags([
+        'node', 'dot', 'gen',
+        '--custom-prompt=Hello, World!',
+        '--path=/path/with/slashes'
+      ]);
+      expect(result).toEqual(['--custom-prompt=Hello, World!', '--path=/path/with/slashes']);
+    });
+
+    it('should handle short flags that are unknown', () => {
+      const result = extractForwardedFlags([
+        'node', 'dot', 'gen',
+        '-x', 'value', // unknown short flag
+        '-y' // unknown short flag without value
+      ]);
+      expect(result).toEqual(['-x', 'value', '-y']);
+    });
+
+    it('should skip positional path argument after gen command', () => {
+      const result = extractForwardedFlags([
+        'node', 'dot', 'gen', './src', // positional path - skip
+        '--custom-flag' // unknown flag - extract
+      ]);
+      expect(result).toEqual(['--custom-flag']);
+    });
+
+    it('should handle empty case with only known flags', () => {
+      const result = extractForwardedFlags([
+        'node', 'dot', 'gen',
+        '--parallel',
+        '--force',
+        '--concurrency', '10'
+      ]);
+      expect(result).toEqual([]);
+    });
+
+    it('should handle flags after path argument', () => {
+      const result = extractForwardedFlags([
+        'node', 'dot', 'gen',
+        './src', // path
+        '--custom1', // after path
+        '--custom2', 'value' // after path
+      ]);
+      expect(result).toEqual(['--custom1', '--custom2', 'value']);
+    });
+  });
+
+  describe('maxRecursionDepth Validation', () => {
+    // Helper function to test maxRecursionDepth type guard logic
+    // Replicates the logic from gen.ts lines 416-423
+    function shouldContinueRecursion(
+      maxRecursionDepth: number | "∞",
+      currentIteration: number
+    ): boolean {
+      const isInfinite = maxRecursionDepth === "∞";
+
+      if (!isInfinite && typeof maxRecursionDepth === 'number' && currentIteration >= maxRecursionDepth - 1) {
+        return false; // Stop recursion
+      }
+
+      return true; // Continue recursion
+    }
+
+    describe('Infinity Symbol Handling', () => {
+      it('should continue recursion indefinitely when maxRecursionDepth is "∞"', () => {
+        expect(shouldContinueRecursion("∞", 0)).toBe(true);
+        expect(shouldContinueRecursion("∞", 10)).toBe(true);
+        expect(shouldContinueRecursion("∞", 100)).toBe(true);
+        expect(shouldContinueRecursion("∞", 1000)).toBe(true);
+      });
+
+      it('should correctly identify infinity symbol with type guard', () => {
+        const maxDepth: number | "∞" = "∞";
+        const isInfinite = maxDepth === "∞";
+
+        expect(isInfinite).toBe(true);
+        expect(typeof maxDepth).toBe('string');
+      });
+    });
+
+    describe('Numeric Depth Limits', () => {
+      it('should stop recursion when reaching maxRecursionDepth', () => {
+        expect(shouldContinueRecursion(10, 0)).toBe(true);  // iteration 1: continue
+        expect(shouldContinueRecursion(10, 5)).toBe(true);  // iteration 6: continue
+        expect(shouldContinueRecursion(10, 8)).toBe(true);  // iteration 9: continue
+        expect(shouldContinueRecursion(10, 9)).toBe(false); // iteration 10: stop (at maxDepth - 1)
+        expect(shouldContinueRecursion(10, 10)).toBe(false); // iteration 11: stop (past limit)
+      });
+
+      it('should handle maxRecursionDepth = 1 (single iteration)', () => {
+        expect(shouldContinueRecursion(1, 0)).toBe(false); // Stop immediately
+      });
+
+      it('should handle maxRecursionDepth = 2', () => {
+        expect(shouldContinueRecursion(2, 0)).toBe(true);  // iteration 1: continue
+        expect(shouldContinueRecursion(2, 1)).toBe(false); // iteration 2: stop
+      });
+
+      it('should handle large maxRecursionDepth values', () => {
+        expect(shouldContinueRecursion(1000, 500)).toBe(true);
+        expect(shouldContinueRecursion(1000, 998)).toBe(true);
+        expect(shouldContinueRecursion(1000, 999)).toBe(false);
+      });
+    });
+
+    describe('Type Guards', () => {
+      it('should correctly narrow type from union to number', () => {
+        const maxDepth: number | "∞" = 10;
+        const isInfinite = maxDepth === "∞";
+
+        expect(isInfinite).toBe(false);
+        expect(typeof maxDepth).toBe('number');
+
+        // Type guard narrows maxDepth to number in this block
+        if (!isInfinite && typeof maxDepth === 'number') {
+          expect(maxDepth).toBe(10);
+          // Can safely do numeric operations
+          expect(maxDepth - 1).toBe(9);
+        }
+      });
+
+      it('should handle union type without runtime errors', () => {
+        const testValues: (number | "∞")[] = [1, 5, 10, "∞", 100];
+
+        for (const maxDepth of testValues) {
+          const isInfinite = maxDepth === "∞";
+
+          // Should not throw TypeError
+          expect(() => {
+            if (!isInfinite && typeof maxDepth === 'number') {
+              const _ = maxDepth - 1;
+            }
+          }).not.toThrow();
+        }
+      });
+
+      it('should prevent comparing "∞" to number directly', () => {
+        const maxDepth: number | "∞" = "∞";
+        const iteration = 5;
+
+        // This would cause TypeError without type guard:
+        // iteration >= maxDepth - 1
+
+        // Correct approach with type guard:
+        const isInfinite = maxDepth === "∞";
+        if (!isInfinite && typeof maxDepth === 'number') {
+          // Safe to compare now
+          expect(iteration < maxDepth).toBe(true);
+        } else {
+          // Infinity case
+          expect(isInfinite).toBe(true);
+        }
+      });
+    });
+
+    describe('Edge Cases', () => {
+      it('should handle iteration 0 correctly', () => {
+        expect(shouldContinueRecursion(10, 0)).toBe(true);
+        expect(shouldContinueRecursion("∞", 0)).toBe(true);
+      });
+
+      it('should handle maxRecursionDepth exactly equal to current iteration', () => {
+        expect(shouldContinueRecursion(5, 4)).toBe(false); // iteration 5, depth 5: stop
+        expect(shouldContinueRecursion(5, 5)).toBe(false); // past limit: stop
+      });
+    });
+  });
 });

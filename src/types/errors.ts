@@ -59,7 +59,6 @@ export class ParseError extends BaseError {
 }
 
 export type ParseErrorCode =
-  | 'INVALID_FRONTMATTER'
   | 'MISSING_FIELD'
   | 'MALFORMED_YAML'
   | 'INVALID_CONTENT';
@@ -85,7 +84,11 @@ export type ValidationErrorCode =
   | 'INVALID_CONFIG'
   | 'INVALID_PATH'
   | 'INVALID_MODEL'
-  | 'INVALID_PERMISSION_MODE';
+  | 'INVALID_PERMISSION_MODE'
+  | 'INVALID_FLAG_FORMAT'    // Flag doesn't start with - or --
+  | 'INVALID_FLAG_NAME'       // Flag name contains invalid characters
+  | 'INVALID_FLAG_VALUE'      // Flag value contains dangerous characters
+  | 'DANGEROUS_FLAG';         // Flag is blacklisted for security reasons
 
 /**
  * Filesystem operation errors

@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   validatePathWithinBase,
   parseFileContent,
-  validateFrontmatter,
-  serializeFileContent,
   isAiFile,
   shouldSkipDirectory,
 } from './parser-core';
@@ -42,221 +40,28 @@ describe('Parser Core (Pure Functions)', () => {
   });
 
   describe('parseFileContent', () => {
-    it('parses valid frontmatter and content', () => {
-      const raw = `---
-agent: claude-code
-artifacts: []
----
-
-# Test Content
-
-This is the body.`;
-
+    it('returns plain markdown content as-is', () => {
+      const raw = '# Test Content\n\nThis is the body.';
       const result = parseFileContent(raw);
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        expect(result.value.frontmatter).toEqual({
-          agent: 'claude-code',
-          artifacts: [],
-        });
-        expect(result.value.content).toBe('# Test Content\n\nThis is the body.');
-      }
+      expect(result).toBe('# Test Content\n\nThis is the body.');
     });
 
-    it('handles content without frontmatter', () => {
-      const raw = '# Just content\n\nNo frontmatter here.';
+    it('trims leading and trailing whitespace', () => {
+      const raw = '  \n\nContent with leading/trailing whitespace\n  \n';
       const result = parseFileContent(raw);
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        expect(result.value.frontmatter).toEqual({});
-        expect(result.value.content).toBe(raw);
-      }
+      expect(result).toBe('Content with leading/trailing whitespace');
     });
 
-    it('returns error for malformed YAML', () => {
-      const raw = `---
-agent: claude-code
-invalid yaml: [broken
----
-
-Content`;
-
+    it('handles empty content', () => {
+      const raw = '   ';
       const result = parseFileContent(raw);
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error.type).toBe('parse');
-        expect(result.error.code).toBe('MALFORMED_YAML');
-      }
+      expect(result).toBe('');
     });
 
-    it('trims content whitespace', () => {
-      const raw = `---
-agent: test
----
-
-  
-Content with leading/trailing whitespace
-  
-`;
-
+    it('preserves internal whitespace', () => {
+      const raw = 'Line 1\n\nLine 2\n\nLine 3';
       const result = parseFileContent(raw);
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        expect(result.value.content).toBe('Content with leading/trailing whitespace');
-      }
-    });
-  });
-
-  describe('validateFrontmatter', () => {
-    it('validates correct frontmatter', () => {
-      const data = {
-        agent: 'claude-code',
-        artifacts: ['file1.ts', 'file2.ts'],
-        agent_config: { model: 'sonnet' },
-      };
-
-      const result = validateFrontmatter(data);
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        expect(result.value).toEqual(data);
-      }
-    });
-
-    it('validates minimal frontmatter (only agent)', () => {
-      const data = { agent: 'claude-code' };
-      const result = validateFrontmatter(data);
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        expect(result.value.agent).toBe('claude-code');
-        expect(result.value.artifacts).toEqual([]);
-        expect(result.value.agent_config).toBeUndefined();
-      }
-    });
-
-    it('defaults artifacts to empty array', () => {
-      const data = { agent: 'test' };
-      const result = validateFrontmatter(data);
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        expect(result.value.artifacts).toEqual([]);
-      }
-    });
-
-    it('rejects non-object frontmatter', () => {
-      const result = validateFrontmatter('not an object');
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error.type).toBe('validation');
-        expect(result.error.code).toBe('INVALID_CONFIG');
-      }
-    });
-
-    it('rejects null frontmatter', () => {
-      const result = validateFrontmatter(null);
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error.code).toBe('INVALID_CONFIG');
-      }
-    });
-
-    it('rejects missing agent field', () => {
-      const result = validateFrontmatter({ artifacts: [] });
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error.type).toBe('validation');
-        expect(result.error.code).toBe('INVALID_AGENT');
-      }
-    });
-
-    it('rejects empty string agent', () => {
-      const result = validateFrontmatter({ agent: '' });
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error.code).toBe('INVALID_AGENT');
-      }
-    });
-
-    it('rejects non-string agent', () => {
-      const result = validateFrontmatter({ agent: 123 });
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error.code).toBe('INVALID_AGENT');
-      }
-    });
-
-    it('rejects non-array artifacts', () => {
-      const result = validateFrontmatter({
-        agent: 'test',
-        artifacts: 'not-an-array',
-      });
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error.code).toBe('INVALID_ARTIFACTS');
-      }
-    });
-
-    it('rejects artifacts with non-string elements', () => {
-      const result = validateFrontmatter({
-        agent: 'test',
-        artifacts: ['file1.ts', 123, 'file2.ts'],
-      });
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error.code).toBe('INVALID_ARTIFACTS');
-      }
-    });
-
-    it('rejects non-object agent_config', () => {
-      const result = validateFrontmatter({
-        agent: 'test',
-        agent_config: 'not-an-object',
-      });
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error.code).toBe('INVALID_CONFIG');
-      }
-    });
-
-    it('rejects null agent_config', () => {
-      const result = validateFrontmatter({
-        agent: 'test',
-        agent_config: null,
-      });
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error.code).toBe('INVALID_CONFIG');
-      }
-    });
-  });
-
-  describe('serializeFileContent', () => {
-    it('serializes frontmatter and content', () => {
-      const frontmatter = {
-        agent: 'claude-code',
-        artifacts: ['file.ts'],
-        agent_config: { model: 'sonnet' },
-      };
-      const content = '# Test\n\nContent here.';
-
-      const result = serializeFileContent(frontmatter, content);
-
-      expect(result).toContain('---');
-      expect(result).toContain('agent: claude-code');
-      expect(result).toContain('# Test');
-      expect(result).toContain('Content here.');
-    });
-
-    it('handles empty artifacts', () => {
-      const frontmatter = {
-        agent: 'test',
-        artifacts: [],
-      };
-      const content = 'Content';
-
-      const result = serializeFileContent(frontmatter, content);
-
-      expect(result).toContain('agent: test');
-      expect(result).toContain('artifacts: []');
+      expect(result).toBe('Line 1\n\nLine 2\n\nLine 3');
     });
   });
 

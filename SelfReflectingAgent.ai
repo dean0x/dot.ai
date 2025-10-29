@@ -1,19 +1,3 @@
----
-agent: claude-code
-artifacts: []
-recursive: true
-max_recursion_depth: 10
-agent_config:
-  appendSystemPrompt: |
-    You are in SELF-REFLECTION mode. After generating artifacts, you MUST:
-
-    1. ANALYZE your output against the Quality Criteria below
-    2. UPDATE this .ai file's "## Reflection Log" section with findings
-    3. If critical issues found, ADD them to "## Next Iteration" section
-    4. If quality criteria met, DO NOT modify this spec (signals completion)
-
-    Your reflection should be honest and critical. Don't accept mediocre work.
----
 
 # Self-Reflecting Agent Template
 

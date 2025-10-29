@@ -71,22 +71,18 @@ Most agents (like Claude) have their own rate limiting built in. This is more of
 
 ### Proposed Solution
 
-Add configurable delay between iterations:
+Add configurable delay between iterations via CLI flag:
 
-```typescript
-interface AiFileFrontmatter {
-  recursive?: boolean;
-  max_recursion_depth?: number | "∞";
-  iteration_delay_ms?: number; // NEW: delay between iterations (default: 0)
-}
+```bash
+dot gen --recursive --iteration-delay 2000  # 2 second delay between iterations
 ```
 
 Or add a global config:
-```yaml
-# .dotai/config.json
+```json
+// .dotai/config.json
 {
   "recursion": {
-    "iteration_delay_ms": 2000  // 2 second delay between iterations
+    "iteration_delay_ms": 2000
   }
 }
 ```
@@ -94,8 +90,8 @@ Or add a global config:
 **Implementation:**
 ```typescript
 // In the while loop after processing iteration
-if (currentAiFile.frontmatter.recursive && shouldContinue) {
-  const delay = currentAiFile.frontmatter.iteration_delay_ms ?? 0;
+if (options.recursive && shouldContinue) {
+  const delay = options.iterationDelayMs ?? 0;
   if (delay > 0) {
     console.log(chalk.gray(`  Waiting ${delay}ms before next iteration...`));
     await new Promise(resolve => setTimeout(resolve, delay));

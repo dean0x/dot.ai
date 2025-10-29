@@ -40,6 +40,32 @@ program
     }
     return num;
   })
+  .option('-a, --agent <name>', 'Coding agent to use (default: claude-code)', (value) => {
+    // Security: Whitelist allowed agents to prevent path traversal and module loading attacks
+    const ALLOWED_AGENTS = ['claude-code', 'cursor', 'aider'];
+    if (!ALLOWED_AGENTS.includes(value)) {
+      throw new Error(
+        `Invalid agent: "${value}". Allowed agents: ${ALLOWED_AGENTS.join(', ')}`
+      );
+    }
+    return value;
+  }, 'claude-code')
+  .option('-r, --recursive', 'Enable recursive processing when agent updates spec (default: true)', true)
+  .option('--no-recursive', 'Disable recursive processing')
+  .option('-m, --max-recursion-depth <number>', 'Maximum recursion depth (default: 10, use "∞" for infinite)', (value) => {
+    if (value === '∞' || value === 'Infinity') {
+      return '∞';
+    }
+    const num = parseInt(value, 10);
+    if (isNaN(num)) {
+      throw new Error(`--max-recursion-depth must be a number or "∞", got: ${value}`);
+    }
+    if (num < 1) {
+      throw new Error(`--max-recursion-depth must be >= 1, got: ${num}`);
+    }
+    return num;
+  }, 10)
+  .allowUnknownOption() // Allow unknown flags to be forwarded to the coding agent
   .action(genCommand);
 
 program

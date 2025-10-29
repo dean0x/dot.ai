@@ -1,8 +1,10 @@
 import chalk from 'chalk';
 import { ParserService } from '../../core/parser-service';
+import { StateService } from '../../core/state-service';
 import { NodeFileSystem } from '../../infrastructure/fs-adapter';
 import { CryptoHasher } from '../../infrastructure/hasher-adapter';
 import { isErr } from '../../utils/result';
+import { getFileState } from '../../core/state-core';
 
 export async function lsCommand(targetPath?: string): Promise<void> {
   try {
@@ -15,6 +17,11 @@ export async function lsCommand(targetPath?: string): Promise<void> {
     const fs = new NodeFileSystem();
     const hasher = new CryptoHasher();
     const parserService = new ParserService(fs, hasher);
+    const stateService = new StateService(fs);
+
+    // Load state to get artifacts
+    const stateResult = await stateService.loadState(process.cwd());
+    const state = isErr(stateResult) ? { version: '0.1.0', files: {} } : stateResult.value;
 
     // Find all .ai files
     const findResult = await parserService.findAiFiles(searchPath);
@@ -45,11 +52,14 @@ export async function lsCommand(targetPath?: string): Promise<void> {
     // Display each file with its artifacts
     for (const aiFile of aiFiles) {
       console.log(chalk.white.bold(aiFile.path));
-      console.log(chalk.gray(`  Agent: ${aiFile.frontmatter.agent}`));
 
-      if (aiFile.frontmatter.artifacts.length > 0) {
-        console.log(chalk.gray(`  Artifacts (${aiFile.frontmatter.artifacts.length}):`));
-        for (const artifact of aiFile.frontmatter.artifacts) {
+      // Get artifacts from state (no longer in frontmatter)
+      const fileState = getFileState(state, aiFile.path);
+      const artifacts = fileState?.artifacts || [];
+
+      if (artifacts.length > 0) {
+        console.log(chalk.gray(`  Artifacts (${artifacts.length}):`));
+        for (const artifact of artifacts) {
           console.log(chalk.gray(`    • ${artifact}`));
         }
       } else {
