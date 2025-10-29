@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING CHANGES
+
+- **Frontmatter Removed from .ai Files**: Configuration now passed via CLI flags instead of YAML frontmatter
+  - **Before (v0.1.x)**:
+    ```yaml
+    ---
+    agent: claude-code
+    artifacts: []
+    recursive: true
+    max_recursion_depth: 10
+    ---
+
+    # Your Specification
+    Generate a login component...
+    ```
+  - **After (v0.2.0)**:
+    ```markdown
+    # Your Specification
+    Generate a login component...
+    ```
+    Configuration via CLI:
+    ```bash
+    dot gen --agent claude-code --recursive --max-recursion-depth 10
+    ```
+  - **Migration**: Remove all YAML frontmatter blocks (lines between `---` delimiters) from your .ai files
+  - **Rationale**: Frontmatter was fragile when AI agents updated files; CLI flags provide cleaner separation of concerns
+  - **Impact**: All existing .ai files with frontmatter will fail to process until frontmatter is removed
+  - **New CLI Flags**:
+    - `--agent <name>`: Specify coding agent (default: claude-code, allowed: claude-code, cursor, aider)
+    - `--recursive / --no-recursive`: Enable/disable recursive processing (default: true)
+    - `--max-recursion-depth <number>`: Set recursion limit (default: 10, use "∞" for infinite)
+  - **Flag Forwarding**: Unknown flags are automatically forwarded to Claude Code CLI for future compatibility
+  - **Security**: Dangerous flags (--mcp-config, --add-dir, --settings, --plugin-dir) are blacklisted to prevent malicious code execution
+
 ### Added
 
 - **Parallel Processing Mode**: Optional parallel processing for faster multi-file generation

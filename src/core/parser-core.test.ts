@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   validatePathWithinBase,
   parseFileContent,
-  validateFrontmatter,
-  serializeFileContent,
   isAiFile,
   shouldSkipDirectory,
 } from './parser-core';
@@ -66,9 +64,6 @@ describe('Parser Core (Pure Functions)', () => {
       expect(result).toBe('Line 1\n\nLine 2\n\nLine 3');
     });
   });
-
-  // NOTE: validateFrontmatter and serializeFileContent functions removed
-  // Configuration now passed via CLI flags instead of frontmatter
 
   describe('isAiFile', () => {
     it('returns true for .ai files', () => {

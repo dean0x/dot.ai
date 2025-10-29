@@ -18,24 +18,29 @@ export interface AiFile {
 }
 
 /**
+ * Agent configuration shared between GenOptions and InvokeOptions
+ */
+export interface AgentConfiguration {
+  /** Agent-specific configuration (e.g., model, tools, system prompt) */
+  agentConfig?: Record<string, unknown>;
+
+  /** Additional CLI flags to forward to the coding agent */
+  forwardedFlags?: string[];
+}
+
+/**
  * CLI options for generation
  * These replace the old frontmatter configuration
  */
-export interface GenOptions {
+export interface GenOptions extends AgentConfiguration {
   /** Coding agent to use (default: claude-code) */
   agent: string;
-
-  /** Agent-specific configuration */
-  agentConfig?: Record<string, unknown>;
 
   /** Whether to run recursively after changes are detected (default: true) */
   recursive: boolean;
 
   /** Maximum recursion depth (default: 10, use "∞" for infinite) */
   maxRecursionDepth: number | "∞";
-
-  /** Additional flags to forward to the coding agent */
-  forwardedFlags?: string[];
 }
 
 /**
@@ -97,18 +102,12 @@ export interface GenerationResult {
 /**
  * Options for agent invocation
  */
-export interface InvokeOptions {
+export interface InvokeOptions extends AgentConfiguration {
   /** Working directory */
   cwd: string;
 
-  /** Agent-specific configuration */
-  agentConfig?: Record<string, unknown>;
-
   /** List of existing artifact paths (for context) */
   existingArtifacts?: string[];
-
-  /** Additional CLI flags to forward to the agent */
-  forwardedFlags?: string[];
 }
 
 /**

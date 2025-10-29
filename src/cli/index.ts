@@ -40,7 +40,16 @@ program
     }
     return num;
   })
-  .option('-a, --agent <name>', 'Coding agent to use (default: claude-code)', 'claude-code')
+  .option('-a, --agent <name>', 'Coding agent to use (default: claude-code)', (value) => {
+    // Security: Whitelist allowed agents to prevent path traversal and module loading attacks
+    const ALLOWED_AGENTS = ['claude-code', 'cursor', 'aider'];
+    if (!ALLOWED_AGENTS.includes(value)) {
+      throw new Error(
+        `Invalid agent: "${value}". Allowed agents: ${ALLOWED_AGENTS.join(', ')}`
+      );
+    }
+    return value;
+  }, 'claude-code')
   .option('-r, --recursive', 'Enable recursive processing when agent updates spec (default: true)', true)
   .option('--no-recursive', 'Disable recursive processing')
   .option('-m, --max-recursion-depth <number>', 'Maximum recursion depth (default: 10, use "∞" for infinite)', (value) => {

@@ -47,16 +47,16 @@ The `.ai` file system enables **declarative, AI-powered code generation** where 
 
 ### .ai Files
 
-**Definition:** Markdown documents with YAML frontmatter that specify what code should be generated.
+**Definition:** Plain Markdown documents that specify what code should be generated.
 
 **Purpose:**
 - Document intent and requirements in human-readable form
-- Track which artifacts implement the specification
-- Configure which agent should implement the spec
+- Serve as the single source of truth for what should be implemented
+- Provide context for AI agents to generate artifacts
 
 **Lifecycle:**
-1. Created with specification (artifacts empty)
-2. First generation populates artifacts list
+1. Created with specification
+2. First generation creates artifacts based on specification
 3. Subsequent edits trigger incremental updates via diffs
 4. Artifacts can be manually edited (agent merges intelligently)
 
@@ -65,7 +65,7 @@ The `.ai` file system enables **declarative, AI-powered code generation** where 
 **Definition:** Generated code files that implement a `.ai` specification.
 
 **Properties:**
-- Tracked in the `.ai` file's frontmatter
+- Tracked in state file (`.dotai/state.json`)
 - **Fully editable** by developers
 - Updated by agent when specification changes
 - Can be created, modified, or deleted by agents
@@ -139,19 +139,18 @@ project/
 ### Data Flow
 
 ```
-1. User runs `dot gen`
+1. User runs `dot gen` (with optional CLI flags)
 2. Find all .ai files in directory tree
-3. Parse frontmatter + markdown content
+3. Parse markdown content
 4. Load state from .dotai/state.json
 5. Detect changes via hash comparison
 6. For each changed file:
    a. Get previous state (if exists)
    b. Build prompt (first-time or diff-based)
-   c. Get configured agent
+   c. Get configured agent (from CLI flags or default)
    d. Invoke agent with prompt
    e. Parse agent output for artifacts
-   f. Update .ai file frontmatter with artifacts
-   g. Update state with new hash + content
+   f. Update state with new hash, content, and artifacts list
 7. Save state back to disk
 ```
 
@@ -161,82 +160,7 @@ project/
 
 ### .ai File Structure
 
-```markdown
----
-agent: string                    # REQUIRED: Agent name
-artifacts: string[]              # AUTO-TRACKED: Generated files
-agent_config:                    # OPTIONAL: Agent-specific config
-  key: value
----
-
-# Specification Content
-
-Markdown content describing what should be implemented.
-```
-
-### Frontmatter Fields
-
-#### `agent` (required)
-
-**Type:** `string`
-**Purpose:** Specifies which coding agent to use
-**Examples:** `"claude-code"`, `"cursor"`, `"aider"`
-
-**Validation:**
-- Must be a non-empty string
-- Must match a registered agent
-
-#### `artifacts` (auto-tracked)
-
-**Type:** `string[]`
-**Purpose:** Lists generated artifact file paths
-**Default:** `[]` (empty for new files)
-
-**Behavior:**
-- Automatically populated after first generation
-- Updated by dotai after each generation
-- Relative paths from project root
-- Duplicates removed
-
-**Example:**
-```yaml
-artifacts:
-  - src/Button.tsx
-  - src/Button.test.tsx
-  - src/Button.module.css
-```
-
-#### `agent_config` (optional)
-
-**Type:** `object`
-**Purpose:** Agent-specific configuration parameters
-
-**claude-code example:**
-```yaml
-agent_config:
-  model: claude-sonnet-4
-  allowedTools: "Read,Write,Edit,Bash"
-  permission_mode: acceptEdits
-```
-
-**cursor example (future):**
-```yaml
-agent_config:
-  model: gpt-4
-  temperature: 0.7
-```
-
-### Specification Content
-
-**Format:** Markdown
-**Purpose:** Human-readable description of what should be implemented
-
-**Best Practices:**
-- Use clear, specific requirements
-- Break down into bulleted lists
-- Include examples where helpful
-- Describe behavior, not implementation
-- Keep focused on single concern
+**Format:** Plain Markdown (no frontmatter)
 
 **Example:**
 ```markdown
@@ -266,6 +190,80 @@ Create a reusable Button component with TypeScript and React.
 - Accessibility tests
 ```
 
+**Best Practices:**
+- Use clear, specific requirements
+- Break down into bulleted lists
+- Include examples where helpful
+- Describe behavior, not implementation
+- Keep focused on single concern
+
+### CLI Configuration
+
+Configuration is now provided via CLI flags instead of frontmatter, providing cleaner separation of concerns and preventing agents from accidentally corrupting configuration.
+
+#### `--agent` (optional)
+
+**Type:** `string`
+**Default:** `"claude-code"`
+**Purpose:** Specifies which coding agent to use
+**Examples:** `"claude-code"`, `"cursor"`, `"aider"`
+
+**Usage:**
+```bash
+dot gen --agent claude-code
+dot gen --agent cursor
+```
+
+**Validation:**
+- Must match a registered agent (claude-code, cursor, aider)
+
+#### `--recursive` / `--no-recursive` (optional)
+
+**Type:** `boolean`
+**Default:** `true`
+**Purpose:** Enable/disable recursive processing (re-run agent when changes detected)
+
+**Usage:**
+```bash
+dot gen --recursive              # Enable (default)
+dot gen --no-recursive           # Disable
+```
+
+#### `--max-recursion-depth` (optional)
+
+**Type:** `number | "∞"`
+**Default:** `10`
+**Purpose:** Maximum number of recursive iterations
+**Examples:** `5`, `20`, `∞`
+
+**Usage:**
+```bash
+dot gen --max-recursion-depth 5  # Stop after 5 iterations
+dot gen --max-recursion-depth ∞  # Infinite (agent-controlled)
+```
+
+**Validation:**
+- Must be a positive integer or the infinity symbol `∞`
+
+#### Agent-Specific Configuration (optional)
+
+**Purpose:** Pass configuration to the underlying agent CLI
+
+**claude-code example:**
+```bash
+dot gen --model claude-sonnet-4 \
+        --allowedTools "Read,Write,Edit,Bash" \
+        --append-system-prompt "Follow clean code principles"
+```
+
+**Flag Forwarding:**
+Unknown flags are automatically forwarded to the agent CLI for future compatibility. Dangerous flags (--mcp-config, --add-dir, --settings, --plugin-dir) are blacklisted for security.
+
+**Usage:**
+```bash
+dot gen --custom-flag value  # Forwarded to agent if not recognized
+```
+
 ---
 
 ## State Management
@@ -284,8 +282,8 @@ interface DotAiState {
 }
 
 interface AiFileState {
-  lastHash: string;        // SHA-256 hash of content portion only (excluding frontmatter)
-  lastContent: string;     // Full content from last generation (for diffing)
+  lastHash: string;        // SHA-256 hash of markdown content
+  lastContent: string;     // Full markdown content from last generation (for diffing)
   lastGenerated: string;   // ISO 8601 timestamp
   artifacts: string[];     // List of generated artifacts
 }
@@ -371,20 +369,16 @@ interface DotAiConfig {
 ### Hash-Based Detection
 
 **Algorithm:**
-1. Calculate SHA-256 hash of only the content portion (body only, excluding frontmatter)
+1. Calculate SHA-256 hash of markdown content
 2. Compare with stored hash in state
 3. If hashes differ → file changed
 4. If no stored hash → new file
-
-**Why exclude frontmatter from hash?**
-- Frontmatter contains `artifacts:` which is auto-updated after generation
-- Hashing frontmatter would cause infinite regeneration loops
-- Only content changes should trigger regeneration
 
 **Why hash instead of timestamp?**
 - More reliable (timestamps can be unreliable across filesystems)
 - Works everywhere (not dependent on git)
 - Detects any content change, no matter how small
+- Immune to file copy/move operations that preserve content
 
 ### Detection Results
 
@@ -670,16 +664,15 @@ Next steps:
 
 **Behavior:**
 1. Find all `.ai` files in directory tree
-2. Parse all `.ai` files
+2. Parse all `.ai` files (plain markdown)
 3. Load state
 4. Detect changes (or force all if `--force`)
 5. For each changed file (sequentially):
    - Build prompt (first-time or update)
-   - Get configured agent
+   - Get configured agent (from CLI flags or default)
    - Invoke agent
    - Parse output for artifacts
-   - Update `.ai` file frontmatter
-   - Update state
+   - Update state with artifacts list
 6. Save state
 7. Show summary
 
@@ -798,13 +791,7 @@ Error: No .ai files found
 Create a .ai file first, or run "dot init" to get started
 ```
 
-**Invalid frontmatter:**
-```
-Error parsing Button.ai:
-Invalid frontmatter: "agent" field is required
-```
-
-**Agent not found:**
+**Invalid agent:**
 ```
 Error: Unknown agent: custom-agent
 Available agents: claude-code
@@ -1001,20 +988,29 @@ dot ls ./src/components
 
 **Tradeoff:** Larger state file, but acceptable (text compresses well)
 
-### 7. Frontmatter Format
+### 7. CLI Flags Configuration (v0.2.0+)
 
-**Decision:** Use YAML frontmatter in Markdown
+**Decision:** Use CLI flags instead of YAML frontmatter for configuration
 
 **Rationale:**
-- **Familiar:** Used by Jekyll, Hugo, Gatsby, etc.
-- **Readable:** Both YAML and Markdown are human-friendly
-- **Tooling:** Excellent library support (gray-matter)
-- **Flexible:** Easy to add new fields
+- **Separation of concerns:** Content (markdown) separate from config (CLI flags)
+- **Agent safety:** Prevents AI agents from accidentally corrupting configuration when editing specs
+- **Flexibility:** Easy to override config per-run without editing files
+- **Version control:** .ai files remain pure content, config stays in commands
+- **Future-proof:** Flag forwarding enables compatibility with new agent features
+
+**Migration from v0.1.x:**
+Remove all YAML frontmatter blocks (lines between `---` delimiters) from .ai files. Configuration now passed via CLI:
+```bash
+# Before (v0.1.x): Configuration in frontmatter
+# After (v0.2.0): Configuration via CLI flags
+dot gen --agent claude-code --recursive --max-recursion-depth 10
+```
 
 **Alternatives considered:**
-- Pure YAML (rejected: less readable for long specs)
-- JSON frontmatter (rejected: less human-friendly)
-- Custom format (rejected: reinventing wheel)
+- YAML frontmatter (v0.1.x approach, rejected: fragile when agents edit specs)
+- JSON sidecar files (rejected: too many files, hard to discover)
+- Global config only (rejected: inflexible, can't override per-run)
 
 ---
 
@@ -1037,27 +1033,24 @@ dot gen --parallel 3  # Process up to 3 files concurrently
 ### 2. Additional Agents
 
 **Cursor Agent:**
-```yaml
-agent: cursor
-agent_config:
-  model: gpt-4
-  temperature: 0.7
+```bash
+dot gen --agent cursor \
+        --model gpt-4 \
+        --temperature 0.7
 ```
 
 **Aider Agent:**
-```yaml
-agent: aider
-agent_config:
-  model: gpt-4-turbo
-  edit_format: diff
+```bash
+dot gen --agent aider \
+        --model gpt-4-turbo \
+        --edit-format diff
 ```
 
 **Custom Agent:**
-```yaml
-agent: custom-agent
-agent_config:
-  endpoint: http://localhost:8000
-  api_key: ${CUSTOM_API_KEY}
+```bash
+dot gen --agent custom-agent \
+        --endpoint http://localhost:8000 \
+        --api-key ${CUSTOM_API_KEY}
 ```
 
 ### 3. Dry Run Mode
@@ -1116,13 +1109,15 @@ dot init --template api-endpoint
 **Motivation:** Track when one `.ai` file depends on artifacts from another
 
 **Design:**
-```yaml
----
-agent: claude-code
-artifacts: []
+```bash
+# In .ai file content or separate config
 depends_on:
   - types/User.ai  # Regenerate if User.ai changes
----
+```
+
+Or via CLI:
+```bash
+dot gen --depends-on types/User.ai
 ```
 
 **Behavior:** Cascading regeneration with cycle detection
@@ -1132,15 +1127,11 @@ depends_on:
 **Motivation:** Ensure generated artifacts meet quality standards
 
 **Design:**
-```yaml
----
-agent: claude-code
-artifacts: []
-validation:
-  - npm run lint
-  - npm run typecheck
-  - npm test Button.test.tsx
----
+```bash
+# Run validation after generation
+dot gen --validate "npm run lint" \
+        --validate "npm run typecheck" \
+        --validate "npm test Button.test.tsx"
 ```
 
 **Behavior:** Run validation after generation, fail if validation fails
@@ -1348,19 +1339,19 @@ CREATE INDEX idx_users_email ON users(email);
 
 ### B. Terminology Glossary
 
-- **.ai file:** Markdown specification file with YAML frontmatter
+- **.ai file:** Plain Markdown specification file describing what to generate
 - **Artifact:** Code file generated from a `.ai` specification
 - **Agent:** AI coding CLI tool that implements specifications
-- **State:** Persistent tracking of generation metadata
+- **State:** Persistent tracking of generation metadata (stored in `.dotai/state.json`)
 - **Hash:** SHA-256 content hash used for change detection
 - **Diff:** Unified diff showing specification changes
-- **Frontmatter:** YAML metadata at the start of `.ai` file
 - **Generation:** Process of invoking agent to create/update artifacts
 - **Force:** Flag to regenerate all files regardless of changes
+- **Recursive:** Mode where agent re-runs when changes are detected
 
 ### C. File Extensions
 
-- `.ai` - Specification file (Markdown with YAML frontmatter)
+- `.ai` - Specification file (plain Markdown, no frontmatter)
 - `.dotai/` - Directory for state and configuration
 - `state.json` - Generation state (gitignored)
 - `config.json` - Project configuration (committed)

