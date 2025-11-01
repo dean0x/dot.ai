@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { initCommand } from './commands/init';
 import { genCommand } from './commands/gen';
 import { statusCommand } from './commands/status';
 import { cleanCommand } from './commands/clean';
@@ -18,12 +17,6 @@ program
   .name('dot')
   .description('dot.ai - AI-powered code generation from .ai specification files')
   .version('0.1.0');
-
-// Register commands
-program
-  .command('init')
-  .description('Initialize .dotai directory structure')
-  .action(initCommand);
 
 program
   .command('gen [path]')
@@ -50,8 +43,7 @@ program
     }
     return value;
   }, 'claude-code')
-  .option('-r, --recursive', 'Enable recursive processing when agent updates spec (default: true)', true)
-  .option('--no-recursive', 'Disable recursive processing')
+  .option('--no-recursive', 'Disable recursive processing (enabled by default)')
   .option('-m, --max-recursion-depth <number>', 'Maximum recursion depth (default: 10, use "∞" for infinite)', (value) => {
     if (value === '∞' || value === 'Infinity') {
       return '∞';

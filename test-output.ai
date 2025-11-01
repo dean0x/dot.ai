@@ -1,9 +1,0 @@
-
-# Test Output Rendering
-
-Create a simple hello world function in TypeScript.
-
-Requirements:
-- Export a function called `sayHello`
-- Takes a name parameter
-- Returns a greeting string

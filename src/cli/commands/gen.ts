@@ -580,8 +580,18 @@ export async function genCommand(targetPath?: string, cmdOptions: GenCommandOpti
     }
     renderer.succeedSpinner(`Parsed ${aiFiles.length} file(s)`);
 
-    // Load current state from project root
+    // Initialize .dotai directory if it doesn't exist (auto-initialization)
     const projectRoot = process.cwd();
+    const initResult = await stateService.initializeDotAi(projectRoot);
+    if (isErr(initResult)) {
+      // Only error if it's not "already exists"
+      if (!initResult.error.message.includes('already exists')) {
+        renderer.error('Error initializing .dotai', initResult.error);
+        process.exit(1);
+      }
+    }
+
+    // Load current state from project root
     const stateResult = await stateService.loadState(projectRoot);
     if (isErr(stateResult)) {
       renderer.error('Error loading state', stateResult.error);
