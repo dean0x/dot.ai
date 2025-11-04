@@ -82,11 +82,11 @@ All configuration via command-line flags:
 # Select agent
 dot gen --agent claude-code
 
-# Disable recursive processing
-dot gen --no-recursive
+# Enable iterative mode (agent can update spec and re-run)
+dot gen --iterate
 
-# Set recursion depth
-dot gen --max-recursion-depth 5
+# Set iteration limit when using --iterate
+dot gen --iterate --max-iterations 5
 
 # Enable parallel processing
 dot gen --parallel --concurrency 10
@@ -105,11 +105,11 @@ Run `dot gen --help` for all options.
 4. **Artifact Tracking** - Generated files are tracked for future incremental updates
 5. **Iterate** - Edit specs, run `dot gen`, repeat
 
-### Recursive Processing
+### Iterative Processing
 
-By default, dot.ai runs recursively - after generating artifacts, it re-reads the `.ai` file to see if the agent updated it with new tasks. This enables iterative refinement workflows.
+dot.ai supports iterative mode with the `--iterate` flag - after generating artifacts, it re-reads the `.ai` file to see if the agent updated it with new tasks. This enables self-directed refinement workflows where the agent can add new tasks for itself.
 
-Disable with `--no-recursive` or control iterations with `--max-recursion-depth`.
+Enable with `--iterate` and control iterations with `--max-iterations`.
 
 ## Examples
 

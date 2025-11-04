@@ -43,17 +43,17 @@ program
     }
     return value;
   }, 'claude-code')
-  .option('--no-recursive', 'Disable recursive processing (enabled by default)')
-  .option('-m, --max-recursion-depth <number>', 'Maximum recursion depth (default: 10, use "∞" for infinite)', (value) => {
+  .option('--iterate', 'Enable iterative mode: re-run agent if it updates the spec (default: disabled)')
+  .option('-i, --max-iterations <number>', 'Maximum iterations when using --iterate (default: 10, use "∞" for infinite)', (value) => {
     if (value === '∞' || value === 'Infinity') {
       return '∞';
     }
     const num = parseInt(value, 10);
     if (isNaN(num)) {
-      throw new Error(`--max-recursion-depth must be a number or "∞", got: ${value}`);
+      throw new Error(`--max-iterations must be a number or "∞", got: ${value}`);
     }
     if (num < 1) {
-      throw new Error(`--max-recursion-depth must be >= 1, got: ${num}`);
+      throw new Error(`--max-iterations must be >= 1, got: ${num}`);
     }
     return num;
   }, 10)

@@ -263,16 +263,16 @@ export class OutputRenderer {
   }
 
   /**
-   * Print recursion summary
+   * Print iteration summary
    */
-  recursionSummary(metrics: {
+  iterationSummary(metrics: {
     totalIterations: number;
     totalTimeMs: number;
-    convergenceReason: 'natural' | 'max_depth' | 'error' | 'none';
+    convergenceReason: 'natural' | 'max_iterations' | 'error' | 'single';
   }): void {
     this.stopSpinner();
     this.newline();
-    console.log(chalk.white.bold(this.getIndent() + 'Recursion Summary:'));
+    console.log(chalk.white.bold(this.getIndent() + 'Iteration Summary:'));
     this.indent();
     console.log(chalk.white(this.getIndent() + `Total iterations: ${metrics.totalIterations}`));
     console.log(chalk.white(this.getIndent() + `Total time: ${(metrics.totalTimeMs / 1000).toFixed(1)}s`));
@@ -285,12 +285,30 @@ export class OutputRenderer {
 
     const convergenceMessages = {
       natural: chalk.green(this.getIndent() + 'Convergence: Natural (spec stabilized)'),
-      max_depth: chalk.yellow(this.getIndent() + 'Convergence: Max depth reached'),
+      max_iterations: chalk.yellow(this.getIndent() + 'Convergence: Max iterations reached'),
       error: chalk.red(this.getIndent() + 'Convergence: Stopped due to error'),
-      none: chalk.gray(this.getIndent() + 'Convergence: Single iteration (non-recursive)'),
+      single: chalk.gray(this.getIndent() + 'Single iteration (--iterate not enabled)'),
     };
     console.log(convergenceMessages[metrics.convergenceReason]);
     this.unindent();
+  }
+
+  /**
+   * @deprecated Use iterationSummary instead
+   */
+  recursionSummary(metrics: {
+    totalIterations: number;
+    totalTimeMs: number;
+    convergenceReason: 'natural' | 'max_depth' | 'error' | 'none';
+  }): void {
+    // Backwards compatibility wrapper
+    const mappedReason = metrics.convergenceReason === 'max_depth' ? 'max_iterations' :
+                        metrics.convergenceReason === 'none' ? 'single' :
+                        metrics.convergenceReason;
+    this.iterationSummary({
+      ...metrics,
+      convergenceReason: mappedReason as 'natural' | 'max_iterations' | 'error' | 'single'
+    });
   }
 
   /**

@@ -26,14 +26,14 @@ interface GenCommandOptions {
   concurrency?: number;
   /** Coding agent to use (default: claude-code) */
   agent?: string;
-  /** Enable recursive processing when agent updates spec (default: true) */
-  recursive?: boolean;
-  /** Maximum recursion depth (default: 10, use "∞" for infinite) */
-  maxRecursionDepth?: number | "∞";
+  /** Enable iterative mode: re-run agent if it updates the spec (default: false) */
+  iterate?: boolean;
+  /** Maximum iterations when using --iterate (default: 10, use "∞" for infinite) */
+  maxIterations?: number | "∞";
 }
 
-// Maximum recursion depth to prevent infinite loops
-const MAX_RECURSION_DEPTH = 10;
+// Default maximum iterations to prevent infinite loops
+const DEFAULT_MAX_ITERATIONS = 10;
 
 // Default concurrency for parallel processing mode
 const DEFAULT_CONCURRENCY = 5;
@@ -114,15 +114,15 @@ async function scanAllFiles(dir: string, baseDir: string = dir): Promise<string[
 }
 
 /**
- * Metrics collected during recursive processing
+ * Metrics collected during iterative processing
  */
-interface RecursionMetrics {
+interface IterationMetrics {
   /** Total number of iterations executed */
   totalIterations: number;
   /** Total time spent in milliseconds across all iterations */
   totalTimeMs: number;
-  /** Reason recursion stopped: 'natural' (agent signaled complete), 'max_depth' (hit limit), 'error' (failure), 'none' (non-recursive file) */
-  convergenceReason: 'natural' | 'max_depth' | 'error' | 'none';
+  /** Reason iteration stopped: 'natural' (agent signaled complete), 'max_iterations' (hit limit), 'error' (failure), 'single' (non-iterative mode) */
+  convergenceReason: 'natural' | 'max_iterations' | 'error' | 'single';
   /** Time in milliseconds for each individual iteration */
   iterationTimes: number[];
 }
@@ -262,15 +262,15 @@ async function processSingleFile(
   fileNum: number,
   totalFiles: number,
   agentName: string,
-  recursive: boolean,
-  maxRecursionDepth: number | "∞",
+  iterate: boolean,
+  maxIterations: number | "∞",
   agentConfig?: Record<string, unknown>,
   forwardedFlags?: string[]
 ): Promise<{
   success: boolean;
   filePath: string;
   fileState: AiFileState | undefined;
-  metrics: RecursionMetrics | undefined;
+  metrics: IterationMetrics | undefined;
 }> {
   const fileName = path.basename(aiFile.path);
 
@@ -278,16 +278,16 @@ async function processSingleFile(
   renderer.indent();
 
   try {
-    // Process file (potentially recursively)
-    const processResult = await processFileRecursively(
+    // Process file (potentially iteratively)
+    const processResult = await processFileIteratively(
       aiFile,
       state,
       parserService,
       cwd,
       renderer,
       agentName,
-      recursive,
-      maxRecursionDepth,
+      iterate,
+      maxIterations,
       agentConfig,
       forwardedFlags
     );
@@ -300,8 +300,8 @@ async function processSingleFile(
 
       // Display metrics summary
       const metrics = processResult.metrics;
-      if (metrics.totalIterations > 1 || recursive) {
-        renderer.recursionSummary(metrics);
+      if (metrics.totalIterations > 1 || iterate) {
+        renderer.iterationSummary(metrics);
       }
 
       return {
@@ -337,22 +337,22 @@ async function processSingleFile(
 /**
  * Process a single .ai file with iterative recursion (no stack growth)
  */
-async function processFileRecursively(
+async function processFileIteratively(
   aiFile: AiFile,
   state: DotAiState,
   parserService: ParserService,
   cwd: string,
   renderer: OutputRenderer,
   agentName: string,
-  recursive: boolean,
-  maxRecursionDepth: number | "∞",
+  iterate: boolean,
+  maxIterations: number | "∞",
   agentConfig?: Record<string, unknown>,
   forwardedFlags?: string[]
 ): Promise<{
   success: boolean;
   updatedState: DotAiState;
   specChanged: boolean;
-  metrics: RecursionMetrics;
+  metrics: IterationMetrics;
 }> {
   const startTime = Date.now();
   const iterationTimes: number[] = [];
@@ -361,7 +361,7 @@ async function processFileRecursively(
   let iteration = 0;
   let finalSuccess = true;
   let finalSpecChanged = false;
-  let convergenceReason: 'natural' | 'max_depth' | 'error' | 'none' = 'none';
+  let convergenceReason: 'natural' | 'max_iterations' | 'error' | 'single' = 'single';
 
   // Iterative loop - no stack growth!
   while (true) {
@@ -397,9 +397,9 @@ async function processFileRecursively(
       break;
     }
 
-    // Check if recursive mode is disabled
-    if (!recursive) {
-      convergenceReason = 'none';
+    // Check if iterative mode is disabled
+    if (!iterate) {
+      convergenceReason = 'single';
       break;
     }
 
@@ -413,17 +413,17 @@ async function processFileRecursively(
     finalSpecChanged = true;
 
     // Spec changed - check if we can continue
-    const isInfinite = maxRecursionDepth === "∞";
+    const isInfinite = maxIterations === "∞";
 
-    if (!isInfinite && typeof maxRecursionDepth === 'number' && iteration >= maxRecursionDepth - 1) {
-      renderer.warning(`Maximum recursion depth (${maxRecursionDepth}) reached`);
+    if (!isInfinite && typeof maxIterations === 'number' && iteration >= maxIterations - 1) {
+      renderer.warning(`Maximum iterations (${maxIterations}) reached`);
       renderer.warning('Agent updated spec but cannot continue');
-      convergenceReason = 'max_depth';
+      convergenceReason = 'max_iterations';
       break;
     }
 
     // Continue with updated spec
-    renderer.info('Agent updated spec with next task, recursing...');
+    renderer.info('Agent updated spec with next task, iterating...');
     renderer.newline();
 
     // Type safety: Verify updatedAiFile exists before continuing
@@ -460,9 +460,8 @@ export async function genCommand(targetPath?: string, cmdOptions: GenCommandOpti
     'parallel', 'p',
     'concurrency', 'c',
     'agent', 'a',
-    'recursive', 'r',
-    'no-recursive',
-    'maxRecursionDepth', 'max-recursion-depth', 'm'
+    'iterate',
+    'maxIterations', 'max-iterations', 'i'
   ]);
 
   // Extract unknown flags to forward to the coding agent
@@ -516,8 +515,8 @@ export async function genCommand(targetPath?: string, cmdOptions: GenCommandOpti
     parallel: cmdOptions.parallel || false,
     concurrency: cmdOptions.concurrency,
     agent: cmdOptions.agent || 'claude-code',
-    recursive: cmdOptions.recursive !== false, // Default to true
-    maxRecursionDepth: cmdOptions.maxRecursionDepth || MAX_RECURSION_DEPTH,
+    iterate: cmdOptions.iterate || false, // Default to false (opt-in)
+    maxIterations: cmdOptions.maxIterations || DEFAULT_MAX_ITERATIONS,
     forwardedFlags
   };
 
@@ -612,7 +611,7 @@ export async function genCommand(targetPath?: string, cmdOptions: GenCommandOpti
     const filesToProcess = getFilesToProcess(changes);
 
     // Check if infinite recursion is enabled via CLI flags
-    if (options.recursive && options.maxRecursionDepth === "∞" && filesToProcess.length > 0) {
+    if (options.iterate && options.maxIterations === "∞" && filesToProcess.length > 0) {
       renderer.infiniteRecursionWarning(
         filesToProcess.map(f => ({ path: f.path, name: path.basename(f.path) }))
       );
@@ -679,8 +678,8 @@ export async function genCommand(targetPath?: string, cmdOptions: GenCommandOpti
             i + 1,
             filesToProcess.length,
             options.agent,
-            options.recursive,
-            options.maxRecursionDepth,
+            options.iterate,
+            options.maxIterations,
             undefined, // agentConfig - not supported yet
             options.forwardedFlags
           );
@@ -749,8 +748,8 @@ export async function genCommand(targetPath?: string, cmdOptions: GenCommandOpti
           i + 1,
           filesToProcess.length,
           options.agent,
-          options.recursive,
-          options.maxRecursionDepth,
+          options.iterate,
+          options.maxIterations,
           undefined, // agentConfig - not supported yet
           options.forwardedFlags
         );

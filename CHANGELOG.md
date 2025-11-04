@@ -26,8 +26,8 @@ Initial release of dot.ai - AI-powered code generation from .ai specification fi
 
 **Configuration Flags:**
 - `--agent <name>` - Select coding agent (default: claude-code)
-- `--no-recursive` - Disable recursive processing
-- `--max-recursion-depth <number>` - Set iteration limit (default: 10, supports "∞")
+- `--iterate` - Enable iterative mode (opt-in: agent can update spec and re-run)
+- `--max-iterations <number>` - Set iteration limit when using --iterate (default: 10, supports "∞")
 - `--parallel` - Enable parallel processing
 - `--concurrency <number>` - Control concurrent files (1-20, default: 5)
 - `--force` - Force regenerate all files

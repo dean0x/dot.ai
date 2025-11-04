@@ -163,14 +163,14 @@ describe('OutputRenderer', () => {
     });
   });
 
-  describe('Recursion Summary', () => {
-    it('prints recursion summary with valid metrics', () => {
-      renderer.recursionSummary({
+  describe('Iteration Summary', () => {
+    it('prints iteration summary with valid metrics', () => {
+      renderer.iterationSummary({
         totalIterations: 5,
         totalTimeMs: 10000,
         convergenceReason: 'natural',
       });
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Recursion Summary'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Iteration Summary'));
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Total iterations: 5'));
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Total time: 10.0s'));
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Average: 2.0s per iteration'));
@@ -178,18 +178,18 @@ describe('OutputRenderer', () => {
 
     it('handles division by zero (totalIterations = 0)', () => {
       // This tests the bug fix - should not crash with division by zero
-      renderer.recursionSummary({
+      renderer.iterationSummary({
         totalIterations: 0,
         totalTimeMs: 0,
         convergenceReason: 'error',
       });
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Recursion Summary'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Iteration Summary'));
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Total iterations: 0'));
       // Should NOT have "Average:" line when totalIterations is 0
     });
 
     it('displays correct convergence reason: natural', () => {
-      renderer.recursionSummary({
+      renderer.iterationSummary({
         totalIterations: 3,
         totalTimeMs: 5000,
         convergenceReason: 'natural',
@@ -197,17 +197,17 @@ describe('OutputRenderer', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Natural'));
     });
 
-    it('displays correct convergence reason: max_depth', () => {
-      renderer.recursionSummary({
+    it('displays correct convergence reason: max_iterations', () => {
+      renderer.iterationSummary({
         totalIterations: 10,
         totalTimeMs: 20000,
-        convergenceReason: 'max_depth',
+        convergenceReason: 'max_iterations',
       });
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Max depth'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Max iterations'));
     });
 
     it('displays correct convergence reason: error', () => {
-      renderer.recursionSummary({
+      renderer.iterationSummary({
         totalIterations: 2,
         totalTimeMs: 1000,
         convergenceReason: 'error',
@@ -215,11 +215,11 @@ describe('OutputRenderer', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('error'));
     });
 
-    it('displays correct convergence reason: none', () => {
-      renderer.recursionSummary({
+    it('displays correct convergence reason: single', () => {
+      renderer.iterationSummary({
         totalIterations: 1,
         totalTimeMs: 2000,
-        convergenceReason: 'none',
+        convergenceReason: 'single',
       });
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Single iteration'));
     });
