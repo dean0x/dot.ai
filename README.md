@@ -128,7 +128,7 @@ See the [`examples/`](./examples/) directory for:
 ## Requirements
 
 - Node.js >=20.0.0
-- Claude Code CLI (installed automatically as peer dependency)
+- Claude Code CLI (install separately: https://github.com/anthropics/claude-code)
 
 ## Security
 

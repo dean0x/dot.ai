@@ -22,7 +22,7 @@
     "automation",
     "cli"
   ],
-  "author": "",
+  "author": "dean0x <https://github.com/dean0x>",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -53,5 +53,14 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }
